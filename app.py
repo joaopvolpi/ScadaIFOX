@@ -12,6 +12,8 @@ from flask import Flask, jsonify, request
 from core.sqlite_helper import init_db
 from core.modbus_client import run_poller
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 app = Flask(__name__)
 init_db()
 

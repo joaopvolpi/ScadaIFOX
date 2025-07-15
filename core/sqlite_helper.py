@@ -1,8 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
-
-DB_FILE = "./data/scada.db"
+from config import DB_FILE
 
 def init_db():
     os.makedirs("data", exist_ok=True)
