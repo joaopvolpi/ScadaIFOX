@@ -2,8 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>SCADA Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>Menu SCADA</title>
   <style>
     * {
       box-sizing: border-box;
@@ -34,180 +33,56 @@
 
     main {
       display: flex;
-      flex-direction: row;
-      gap: 20px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: calc(100vh - 80px);
       padding: 20px;
     }
 
-    .vfd-container {
-      flex: 1;
+    .menu {
+      text-align: center;
       background: #fff;
-      border-radius: 8px;
-      padding: 20px;
+      padding: 30px;
+      border-radius: 12px;
       box-shadow: 0 1px 5px rgba(0,0,0,0.1);
     }
-
-    h2 {
-      text-align: center;
-      margin-top: 0;
-      margin-bottom: 15px;
-      color: black;
+    .menu h2 {
+      margin-bottom: 30px;
+      color: #333;
     }
-
-    .live-data {
-      margin-bottom: 20px;
+    .menu button {
+      display: block;
+      margin: 15px auto;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 300px;
+      transition: background 0.3s ease;
     }
-
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    li {
-      margin: 8px 0;
-      font-size: 1rem;
-      background: #f0f0f0;
-      padding: 6px 10px;
-      border-radius: 4px;
-    }
-
-    .charts-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
-    }
-
-    canvas {
-      width: 100% !important;
-      background: #fafafa;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      aspect-ratio: 2 / 1;
+    .menu button:hover {
+      background: #0056b3;
     }
   </style>
 </head>
 <body>
-
   <header>
     <img src="https://static.wixstatic.com/media/27d767_08537cbec0e841f784ee8e484439ef54~mv2.png/v1/fill/w_428,h_102,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Logo%20IF%20Oxicolor%20-%20Institucional%20Cor%20Site.png" alt="Logo IF Oxicolor">
-    <h1>SCADA Tempo Real</h1>
+    <h1>Menu SCADA</h1>
   </header>
 
   <main>
-    <div class="vfd-container">
-      <h2>Masseira 1</h2>
-      <div id="live-Masseira_1" class="live-data"></div>
-      <div class="charts-grid">
-        <canvas id="chart-Masseira_1-RPM"></canvas>
-        <canvas id="chart-Masseira_1-OutputFrequency"></canvas>
-        <canvas id="chart-Masseira_1-CurrentMagnitude"></canvas>
-        <canvas id="chart-Masseira_1-PercentageLoad"></canvas>
-        <canvas id="chart-Masseira_1-OutputPower"></canvas>
-      </div>
-    </div>
-
-    <div class="vfd-container">
-      <h2>Masseira 2</h2>
-      <div id="live-Masseira_2" class="live-data"></div>
-      <div class="charts-grid">
-        <canvas id="chart-Masseira_2-RPM"></canvas>
-        <canvas id="chart-Masseira_2-OutputFrequency"></canvas>
-        <canvas id="chart-Masseira_2-CurrentMagnitude"></canvas>
-        <canvas id="chart-Masseira_2-PercentageLoad"></canvas>
-        <canvas id="chart-Masseira_2-OutputPower"></canvas>
-      </div>
+    <div class="menu">
+      <h2>Selecione uma Página</h2>
+      <button onclick="location.href='/masseiras_live'">Masseiras - Ao vivo</button>
+      <button onclick="location.href='/masseiras_history'">Masseiras - Dados Históricos</button>
+      <button onclick="location.href='/tanques_live'">Tanques - Ao vivo</button>
+      <button onclick="location.href='/tanques_history'">Tanques - Histórico</button>
     </div>
   </main>
-
-  <script>
-    const devices = ["Masseira_1", "Masseira_2"];
-    const tags = ["RPM", "OutputFrequency", "CurrentMagnitude", "PercentageLoad", "OutputPower"];
-    let meta = {};
-
-    const charts = {};
-    const colors = ["#007bff", "#28a745", "#ffc107", "#17a2b8", "#fd7e14"];
-
-    async function fetchMeta() {
-      const res = await fetch("/api/meta");
-      meta = await res.json();
-    }
-
-    function initCharts() {
-      devices.forEach(device => {
-        charts[device] = {};
-        tags.forEach((tag, index) => {
-          const ctx = document.getElementById(`chart-${device}-${tag}`).getContext("2d");
-          charts[device][tag] = new Chart(ctx, {
-            type: "line",
-            data: {
-              labels: [],
-              datasets: [{
-                label: `${tag} (${meta[tag].unit})`,
-                data: [],
-                borderColor: colors[index % colors.length],
-                fill: false,
-                tension: 0.3
-              }]
-            },
-            options: {
-              animation: false,
-              responsive: true,
-              maintainAspectRatio: true,
-              aspectRatio: 4,
-              scales: {
-                y: {
-                  title: {
-                    display: true,
-                    text: `${tag} (${meta[tag].unit})`
-                  }
-                },
-                x: {
-                  ticks: { autoSkip: true, maxTicksLimit: 10 }
-                }
-              }
-            }
-          });
-        });
-      });
-    }
-
-    async function fetchLiveData() {
-      const res = await fetch("/api/live");
-      const data = await res.json();
-
-      devices.forEach(device => {
-        let html = "<ul>";
-        tags.forEach(tag => {
-          html += `<li><strong>${tag}:</strong> ${data[device][tag]} ${meta[tag].unit}</li>`;
-        });
-        html += "</ul>";
-        document.getElementById(`live-${device}`).innerHTML = html;
-
-        tags.forEach(tag => {
-          const chart = charts[device][tag];
-          const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          chart.data.labels.push(now);
-          chart.data.datasets[0].data.push(data[device][tag]);
-
-          if (chart.data.labels.length > 20) {
-            chart.data.labels.shift();
-            chart.data.datasets[0].data.shift();
-          }
-          chart.update();
-        });
-      });
-    }
-
-    async function start() {
-      await fetchMeta();
-      initCharts();
-      fetchLiveData();
-      setInterval(fetchLiveData, 2000);
-    }
-
-    start();
-  </script>
-
 </body>
 </html>

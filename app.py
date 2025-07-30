@@ -20,9 +20,29 @@ init_db()
 # Shared in-memory store for latest polled data
 DATA_STORE = {}
 
+# Template Routes
+
 @app.route("/")
-def index():
+def main_menu():
     return render_template("index.html")
+
+@app.route("/masseiras_live")
+def masseiras_live():
+    return render_template("masseiras_live.html")
+
+@app.route("/masseiras_history")
+def masseiras_history():
+    return render_template("masseiras_history.html")
+
+@app.route("/tanques_live")
+def tanques_live():
+    return render_template("tanques_live.html")
+
+@app.route("/tanques_history")
+def tanques_history():
+    return render_template("tanques_history.html")
+
+# API Endpoints
 
 @app.route("/vfd/<device_name>")
 def get_device_data(device_name):
@@ -38,10 +58,6 @@ def get_device_data(device_name):
 @app.route("/api/live")
 def get_all_live():
     return jsonify(DATA_STORE)
-
-@app.route("/history")
-def history():
-    return render_template("history.html")
 
 @app.route("/api/history")
 def api_history():

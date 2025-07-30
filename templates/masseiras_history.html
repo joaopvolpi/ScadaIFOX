@@ -86,6 +86,25 @@
   <header>
     <img src="https://static.wixstatic.com/media/27d767_08537cbec0e841f784ee8e484439ef54~mv2.png/v1/fill/w_428,h_102,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Logo%20IF%20Oxicolor%20-%20Institucional%20Cor%20Site.png" alt="Logo IF Oxicolor">
     <h1>  -  Dados Históricos</h1>
+    <select id="pageSelect" onchange="location.href=this.value" style="margin-left:auto; padding:5px;">
+      <option value="/">Menu Principal</option>
+      <option value="/masseiras_live">Masseiras - Ao vivo</option>
+      <option value="/masseiras_history">Masseiras - Dados Históricos</option>
+      <option value="/tanques_live">Tanques - Ao vivo</option>
+      <option value="/tanques_history">Tanques - Histórico</option>
+    </select>
+
+    <script>
+      // Set dropdown selected based on current URL
+      const currentPath = window.location.pathname;
+      const select = document.getElementById("pageSelect");
+      for (let option of select.options) {
+        if (option.value === currentPath) {
+          option.selected = true;
+          break;
+        }
+      }
+    </script>
   </header>
 
   <main>
