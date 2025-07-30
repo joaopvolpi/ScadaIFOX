@@ -23,7 +23,7 @@ def read_device_registers(device, register_map):
         port=device['port'],
         unit_id=device['unit_id'],
         auto_open=True,
-        timeout = 1.5
+        timeout = 2
     )
 
     data = {}
@@ -41,41 +41,35 @@ def read_device_registers(device, register_map):
                 raw = regs[0]
 
             value = raw * multiplier
-            data[reg_name] = round(value, 2)  # Optional: round for nicer output
+            data[reg_name] = round(value, 2)
         else:
             data[reg_name] = None
-
     return data
 
-
-def run_poller(store):
-
-    print("Starting Modbus poller...")
-
+def poll_device(device_name, device_config, store):
+    print(f"Starting poller for {device_name}...")
     while True:
-        for device_name, device in config.DEVICES.items():
-            print(f"Polling {device_name} at {device['ip']}:{device['port']}...")
-            try:
-                result = read_device_registers(device, config.VFD_REGISTER_MAP)
+        print(f"Polling {device_name} at {device_config['ip']}:{device_config['port']}...")
 
-                store[device_name] = result
+        try:
+            register_map = device_config.get("register_map", config.VFD_REGISTER_MAP)
+            result = read_device_registers(device_config, register_map)
 
-                if not all(v is None for v in result.values()):
-                    save_to_csv(device_name, result)
-                    save_to_sqlite(device_name, result)
+            store[device_name] = result
 
-                print(f"Updated {device_name}: {result}")
-                print('-----------------------', flush=True)
+            if not all(v is None for v in result.values()):
+                save_to_csv(device_name, result)
+                save_to_sqlite(device_name, result)
 
-            except Exception as e:
-                print(f"Error polling {device_name}: {e}")
+            print(f"[{device_name}] Updated: {result}", flush=True)
+        except Exception as e:
+            print(f"Error polling {device_name}: {e}")
 
         time.sleep(config.POLL_INTERVAL)
 
 
 def save_to_csv(device_name, result, folder="data"):
-
-
+    
     os.makedirs(folder, exist_ok=True)
     filename = os.path.join(folder, f"{device_name}.csv")
     timestamp = datetime.now().isoformat()

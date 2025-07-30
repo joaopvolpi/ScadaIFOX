@@ -10,7 +10,7 @@ from flask import render_template
 from flask import Flask, jsonify, request
 
 from core.sqlite_helper import init_db
-from core.modbus_client import run_poller
+from core.modbus_client import poll_device
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -83,12 +83,13 @@ def api_meta():
     return jsonify(meta)
 
 if __name__ == "__main__":
-    # Start polling loop in a background thread
-    poller_thread = threading.Thread(target=run_poller, args=(DATA_STORE,))
-    poller_thread.daemon = True
-    poller_thread.start()
+    # Start one poller thread per device
+    for device_name, device_config in config.DEVICES.items():
+        t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
+        t.daemon = True
+        t.start()
 
-    # Start Flask web server
+    # Start Flask server
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
