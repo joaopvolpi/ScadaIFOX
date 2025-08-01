@@ -1,0 +1,21 @@
+<header>
+  <img src="https://static.wixstatic.com/media/27d767_08537cbec0e841f784ee8e484439ef54~mv2.png" alt="Logo IF Oxicolor">
+  <h1>{{ page_title }}</h1>
+  <select id="pageSelect" onchange="location.href=this.value">
+    <option value="/">Menu Principal</option>
+    <option value="/masseiras_live">Masseiras - Ao vivo</option>
+    <option value="/masseiras_history">Masseiras - Dados Históricos</option>
+    <option value="/tanques_live">Tanques - Ao vivo</option>
+    <option value="/tanques_history">Tanques - Histórico</option>
+  </select>
+  <script>
+    const currentPath = window.location.pathname;
+    const select = document.getElementById("pageSelect");
+    for (let option of select.options) {
+      if (option.value === currentPath) {
+        option.selected = true;
+        break;
+      }
+    }
+  </script>
+</header>

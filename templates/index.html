@@ -3,34 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>Menu SCADA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <style>
-    * {
-      box-sizing: border-box;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: Montserrat, Arial, sans-serif;
-      background: #f5f5f5;
-    }
-
-    header {
-      display: flex;
-      align-items: center;
-      background: #fff;
-      padding: 10px 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    header img {
-      height: 50px;
-    }
-    header h1 {
-      margin-left: 15px;
-      font-size: 1.5em;
-      color: #333;
-    }
-
     main {
       display: flex;
       flex-direction: column;
@@ -38,34 +13,6 @@
       justify-content: center;
       height: calc(100vh - 80px);
       padding: 20px;
-    }
-
-    .menu {
-      text-align: center;
-      background: #fff;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.1);
-    }
-    .menu h2 {
-      margin-bottom: 30px;
-      color: #333;
-    }
-    .menu button {
-      display: block;
-      margin: 15px auto;
-      padding: 15px 30px;
-      font-size: 1.2rem;
-      background: #007bff;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      width: 300px;
-      transition: background 0.3s ease;
-    }
-    .menu button:hover {
-      background: #0056b3;
     }
   </style>
 </head>
@@ -77,7 +24,7 @@
 
   <main>
     <div class="menu">
-      <h2>Selecione uma Página</h2>
+      <!-- <h2>Selecione Tela</h2> -->
       <button onclick="location.href='/masseiras_live'">Masseiras - Ao vivo</button>
       <button onclick="location.href='/masseiras_history'">Masseiras - Dados Históricos</button>
       <button onclick="location.href='/tanques_live'">Tanques - Ao vivo</button>

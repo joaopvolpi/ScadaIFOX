@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tanques - Ao Vivo</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .chart-container {
+      height: 200px;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+{% set page_title = "Tanques - Ao Vivo" %}
+{% include "header.html" %}
+
+  <div class="page">
+    <div class="grid">
+      <div class="card">
+        <h2>Resina Acrílica</h2>
+        <div class="chart-container"><canvas id="level-RA"></canvas></div>
+        <div class="weight">Peso: <span id="weight-RA">—</span> kg</div>
+        <div class="info">
+          Operação: <span id="op-RA" class="status-label">—</span><br>
+          Destino: <span id="dest-RA" class="status-label">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Resina Veova</h2>
+        <div class="chart-container"><canvas id="level-RV"></canvas></div>
+        <div class="weight">Peso: <span id="weight-RV">—</span> kg</div>
+        <div class="info">
+          Operação: <span id="op-RV" class="status-label">—</span><br>
+          Destino: <span id="dest-RV" class="status-label">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Água 1</h2>
+        <div class="chart-container"><canvas id="level-A1"></canvas></div>
+        <div class="weight">Peso: <span id="weight-A1">—</span> kg</div>
+        <div class="info">
+          Operação: <span id="op-A1" class="status-label">—</span><br>
+          Destino: <span id="dest-A1" class="status-label">—</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Água 2</h2>
+        <div class="chart-container"><canvas id="level-A2"></canvas></div>
+        <div class="weight">Peso: <span id="weight-A2">—</span> kg</div>
+        <div class="info">
+          Operação: <span id="op-A2" class="status-label">—</span><br>
+          Destino: <span id="dest-A2" class="status-label">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tankMapping = {
+      "Tanque_1_Resina": { chart: "level-RA", weight: "weight-RA", op: "op-RA", dest: "dest-RA", max: 500 },
+      "Tanque_2_Resina": { chart: "level-RV", weight: "weight-RV", op: "op-RV", dest: "dest-RV", max: 500 },
+      "Tanque_1_Agua":   { chart: "level-A1", weight: "weight-A1", op: "op-A1", dest: "dest-A1", max: 2500 },
+      "Tanque_2_Agua":   { chart: "level-A2", weight: "weight-A2", op: "op-A2", dest: "dest-A2", max: 2500 }
+    };
+
+    const charts = {};
+    Object.values(tankMapping).forEach(ids => {
+      charts[ids.chart] = createChart(ids.chart, ids.max);
+    });
+
+    function createChart(canvasId, maxValue) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      return new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [''],
+          datasets: [{
+            data: [0],
+            backgroundColor: '#00bfff',
+            borderRadius: 5
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { display: false } },
+            y: { 
+              min: 0, 
+              max: maxValue, 
+              grid: { color: '#333' }, 
+              ticks: { color: '#e0e0e0' } 
+            }
+          }
+        }
+      });
+    }
+
+    function setLabel(elementId, text, className) {
+      const el = document.getElementById(elementId);
+      el.textContent = text;
+      el.className = `status-label ${className}`;
+    }
+
+    async function fetchTankData() {
+      try {
+        const res = await fetch("/api/live");
+        const data = await res.json();
+
+        Object.entries(tankMapping).forEach(([device, ids]) => {
+          const tankData = data[device];
+          const chartObj = charts[ids.chart];
+
+          if (tankData) {
+            if (typeof tankData["Peso"] !== "undefined") {
+              chartObj.data.datasets[0].data[0] = tankData["Peso"] || 0;
+              chartObj.update();
+              document.getElementById(ids.weight).textContent = tankData["Peso"];
+            } else {
+              document.getElementById(ids.weight).textContent = "—";
+            }
+
+            if (tankData["X002"]) setLabel(ids.op, "Carga", "carga");
+            else if (tankData["X003"]) setLabel(ids.op, "Descarga", "descarga");
+            else setLabel(ids.op, "—", "");
+
+            if (tankData["X004"]) setLabel(ids.dest, "Masseira 1", "m1");
+            else if (tankData["X005"]) setLabel(ids.dest, "Masseira 2", "m2");
+            else setLabel(ids.dest, "—", "");
+
+          } else {
+            chartObj.data.datasets[0].data[0] = 0;
+            chartObj.update();
+            document.getElementById(ids.weight).textContent = "—";
+            setLabel(ids.op, "—", "");
+            setLabel(ids.dest, "—", "");
+          }
+        });
+      } catch (err) {
+        console.error("Error fetching tank data", err);
+      }
+    }
+
+    setInterval(fetchTankData, 2000);
+    fetchTankData();
+  </script>
+</body>
+</html>

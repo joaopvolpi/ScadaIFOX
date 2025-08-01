@@ -1,5 +1,3 @@
-
-
 import os
 import csv
 import config
@@ -44,16 +42,16 @@ def tanques_history():
 
 # API Endpoints
 
-@app.route("/vfd/<device_name>")
-def get_device_data(device_name):
-    """
-    Return the latest data for the given device name.
-    Example: /vfd/Masseira_1
-    """
-    data = DATA_STORE.get(device_name)
-    if data is None:
-        return jsonify({"error": "Device not found"}), 404
-    return jsonify(data)
+# @app.route("/device/<device_name>")
+# def get_device_data(device_name):
+#     """
+#     Return the latest data for the given device name.
+#     Example: /device/Masseira_1
+#     """
+#     data = DATA_STORE.get(device_name)
+#     if data is None:
+#         return jsonify({"error": "Device not found"}), 404
+#     return jsonify(data)
 
 @app.route("/api/live")
 def get_all_live():
@@ -94,9 +92,13 @@ def api_history():
 
 @app.route("/api/meta")
 def api_meta():
-    # Only register metadata: units and multipliers
-    meta = {name: {"unit": info["unit"]} for name, info in config.VFD_REGISTER_MAP.items()}
+    meta = {}
+    # Masseiras
+    meta.update({name: {"unit": info["unit"]} for name, info in config.VFD_REGISTER_MAP.items()})
+    # Tanques
+    meta.update({name: {"unit": info["unit"]} for name, info in config.TANQUES_REGISTER_MAP.items()})
     return jsonify(meta)
+
 
 if __name__ == "__main__":
     # Start one poller thread per device
@@ -109,5 +111,5 @@ if __name__ == "__main__":
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
-        debug=config.FLASK_DEBUG
+        debug=config.FLASK_DEBUG    
     )

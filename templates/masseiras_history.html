@@ -12,41 +12,15 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
   <style>
-    body {
-      font-family: Montserrat, sans-serif;
-      margin: 0;
-      background: #f5f5f5;
-      color: #333;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      background: #fff;
-      padding: 10px 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
-    }
-    header img {
-      height: 50px;
-    }
-    h1 {
-      margin: 0 0 0 15px;
-      font-size: 1.5em;
-    }
     main {
       max-width: 1200px;
       margin: 0 auto;
       padding: 0 20px;
     }
-    .filters {
-      margin-bottom: 20px;
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    }
+
     .date-range {
       display: flex;
       gap: 10px;
@@ -54,58 +28,26 @@
       flex-wrap: wrap;
       margin-top: 10px;
     }
-    input[type="text"] {
-      padding: 6px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      background: #007bff;
-      color: #fff;
-      border: none;
-      padding: 7px 14px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #0056b3;
-    }
+
     .chart-container {
-      background: #fff;
-      border: 1px solid #ccc;
+      background: #1f1f1f;
+      border: 1px solid #333;
       padding: 20px;
       border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
     }
     canvas {
       width: 100% !important;
       height: 600px !important;
-    }
+      background: #121212;
+      border: 1px solid #333;
+      border-radius: 6px;
+    }    
   </style>
 </head>
 <body>
-  <header>
-    <img src="https://static.wixstatic.com/media/27d767_08537cbec0e841f784ee8e484439ef54~mv2.png/v1/fill/w_428,h_102,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Logo%20IF%20Oxicolor%20-%20Institucional%20Cor%20Site.png" alt="Logo IF Oxicolor">
-    <h1>  -  Dados Históricos</h1>
-    <select id="pageSelect" onchange="location.href=this.value" style="margin-left:auto; padding:5px;">
-      <option value="/">Menu Principal</option>
-      <option value="/masseiras_live">Masseiras - Ao vivo</option>
-      <option value="/masseiras_history">Masseiras - Dados Históricos</option>
-      <option value="/tanques_live">Tanques - Ao vivo</option>
-      <option value="/tanques_history">Tanques - Histórico</option>
-    </select>
-
-    <script>
-      // Set dropdown selected based on current URL
-      const currentPath = window.location.pathname;
-      const select = document.getElementById("pageSelect");
-      for (let option of select.options) {
-        if (option.value === currentPath) {
-          option.selected = true;
-          break;
-        }
-      }
-    </script>
-  </header>
+{% set page_title = "Masseiras - Dados Históricos" %}
+{% include "header.html" %}
 
   <main>
     <div class="filters">
@@ -142,7 +84,6 @@
   </main>
 
   <script>
-    // Init Flatpickr
     flatpickr("#start", {
       enableTime: true,
       noCalendar: false,
@@ -167,7 +108,6 @@
       const start = document.getElementById("start")._flatpickr.input.value;
       const end = document.getElementById("end")._flatpickr.input.value;
 
-      // Convert dd/MM/yyyy HH:mm to ISO
       const startISO = start ? toISO(start) : "2000-01-01T00:00:00";
       const endISO = end ? toISO(end) : "2100-01-01T00:00:00";
 
@@ -215,6 +155,7 @@
           parsing: false,
           responsive: true,
           plugins: {
+            legend: { labels: { color: "#e0e0e0" } },
             tooltip: {
               callbacks: {
                 label: function(context) {
@@ -235,17 +176,15 @@
                   hour: 'dd/MM HH:mm'
                 }
               },
-              title: {
-                display: true,
-                text: "Tempo"
-              },
+              title: { display: true, text: "Tempo", color: "#e0e0e0" },
+              ticks: { color: "#c0c0c0" },
+              grid: { color: "#333" },
               ...(minTime && maxTime ? { min: minTime, max: maxTime } : {})
             },
             y: {
-              title: {
-                display: true,
-                text: "Valor"
-              }
+              title: { display: true, text: "Valor", color: "#e0e0e0" },
+              ticks: { color: "#c0c0c0" },
+              grid: { color: "#333" }
             }
           }
         }
@@ -259,7 +198,8 @@
     }
 
     function getRandomColor() {
-      return '#' + Math.floor(Math.random() * 16777215).toString(16);
+      const colors = ["#00bfff", "#28a745", "#ffc107", "#ff4500", "#9370db"];
+      return colors[Math.floor(Math.random() * colors.length)];
     }
   </script>
 </body>

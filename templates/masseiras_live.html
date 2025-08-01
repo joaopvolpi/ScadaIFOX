@@ -4,34 +4,8 @@
   <meta charset="UTF-8" />
   <title>SCADA Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <style>
-    * {
-      box-sizing: border-box;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: Montserrat, Arial, sans-serif;
-      background: #f5f5f5;
-    }
-
-    header {
-      display: flex;
-      align-items: center;
-      background: #fff;
-      padding: 10px 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    header img {
-      height: 50px;
-    }
-    header h1 {
-      margin-left: 15px;
-      font-size: 1.5em;
-      color: #333;
-    }
-
     main {
       display: flex;
       flex-direction: row;
@@ -41,17 +15,20 @@
 
     .vfd-container {
       flex: 1;
-      background: #fff;
-      border-radius: 8px;
+      background: #1f1f1f;
+      border-radius: 10px;
       padding: 20px;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+      border: 1px solid #333;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
     }
 
     h2 {
       text-align: center;
       margin-top: 0;
       margin-bottom: 15px;
-      color: black;
+      color: #f5f5f5;
+      font-weight: 500;
+      text-transform: uppercase;
     }
 
     .live-data {
@@ -66,10 +43,11 @@
 
     li {
       margin: 8px 0;
-      font-size: 1rem;
-      background: #f0f0f0;
+      font-size: 0.95rem;
+      background: #2b2b2b;
       padding: 6px 10px;
       border-radius: 4px;
+      border: 1px solid #444;
     }
 
     .charts-grid {
@@ -80,38 +58,17 @@
 
     canvas {
       width: 100% !important;
-      background: #fafafa;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      background: #121212;
+      border: 1px solid #333;
+      border-radius: 6px;
       aspect-ratio: 2 / 1;
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <img src="https://static.wixstatic.com/media/27d767_08537cbec0e841f784ee8e484439ef54~mv2.png/v1/fill/w_428,h_102,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Logo%20IF%20Oxicolor%20-%20Institucional%20Cor%20Site.png" alt="Logo IF Oxicolor">
-    <h1>SCADA Tempo Real</h1>
-    <select id="pageSelect" onchange="location.href=this.value" style="margin-left:auto; padding:5px;">
-      <option value="/">Menu Principal</option>
-      <option value="/masseiras_live">Masseiras - Ao vivo</option>
-      <option value="/masseiras_history">Masseiras - Dados Históricos</option>
-      <option value="/tanques_live">Tanques - Ao vivo</option>
-      <option value="/tanques_history">Tanques - Histórico</option>
-    </select>
-
-    <script>
-      // Set dropdown selected based on current URL
-      const currentPath = window.location.pathname;
-      const select = document.getElementById("pageSelect");
-      for (let option of select.options) {
-        if (option.value === currentPath) {
-          option.selected = true;
-          break;
-        }
-      }
-    </script>
-  </header>
+{% set page_title = "Masseiras - Ao Vivo" %}
+{% include "header.html" %}
 
   <main>
     <div class="vfd-container">
@@ -145,7 +102,7 @@
     let meta = {};
 
     const charts = {};
-    const colors = ["#007bff", "#28a745", "#ffc107", "#17a2b8", "#fd7e14"];
+    const colors = ["#00bfff", "#28a745", "#ffc107", "#ff4500", "#9370db"];
 
     async function fetchMeta() {
       const res = await fetch("/api/meta");
@@ -165,6 +122,7 @@
                 label: `${tag} (${meta[tag].unit})`,
                 data: [],
                 borderColor: colors[index % colors.length],
+                backgroundColor: "transparent",
                 fill: false,
                 tension: 0.3
               }]
@@ -174,15 +132,22 @@
               responsive: true,
               maintainAspectRatio: true,
               aspectRatio: 4,
+              plugins: {
+                legend: { labels: { color: "#e0e0e0" } }
+              },
               scales: {
                 y: {
                   title: {
                     display: true,
-                    text: `${tag} (${meta[tag].unit})`
-                  }
+                    text: `${tag} (${meta[tag].unit})`,
+                    color: "#e0e0e0"
+                  },
+                  ticks: { color: "#c0c0c0" },
+                  grid: { color: "#333" }
                 },
                 x: {
-                  ticks: { autoSkip: true, maxTicksLimit: 10 }
+                  ticks: { autoSkip: true, maxTicksLimit: 10, color: "#c0c0c0" },
+                  grid: { color: "#333" }
                 }
               }
             }

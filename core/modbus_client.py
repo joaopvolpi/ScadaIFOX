@@ -23,7 +23,7 @@ def read_device_registers(device, register_map):
         port=device['port'],
         unit_id=device['unit_id'],
         auto_open=True,
-        timeout = 2
+        timeout=2
     )
 
     data = {}
@@ -39,37 +39,61 @@ def read_device_registers(device, register_map):
                 raw = combine_16bit_big_endian(regs[0], regs[1])
             else:
                 raw = regs[0]
-
             value = raw * multiplier
             data[reg_name] = round(value, 2)
         else:
             data[reg_name] = None
     return data
 
+def read_device_coils(device, coil_map):
+    client = ModbusClient(
+        host=device['ip'],
+        port=device['port'],
+        unit_id=device['unit_id'],
+        auto_open=True,
+        timeout=2
+    )
+
+    data = {}
+
+    for coil_name, coil_info in coil_map.items():
+        address = coil_info['address']
+        res = client.read_coils(address, 1)
+        if res and len(res) == 1:
+            data[coil_name] = bool(res[0])
+        else:
+            data[coil_name] = None
+    return data
+
 def poll_device(device_name, device_config, store):
     print(f"Starting poller for {device_name}...")
     while True:
-        print(f"Polling {device_name} at {device_config['ip']}:{device_config['port']}...")
-
         try:
-            register_map = device_config.get("register_map", config.VFD_REGISTER_MAP)
-            result = read_device_registers(device_config, register_map)
+            all_data = {}
+            register_map = device_config.get("register_map")
+            coil_map = device_config.get("coil_map")
 
-            store[device_name] = result
+            if register_map:
+                reg_values = read_device_registers(device_config, register_map)
+                all_data.update(reg_values)
 
-            if not all(v is None for v in result.values()):
-                save_to_csv(device_name, result)
-                save_to_sqlite(device_name, result)
+            if coil_map:
+                coil_values = read_device_coils(device_config, coil_map)
+                all_data.update(coil_values)
 
-            print(f"[{device_name}] Updated: {result}", flush=True)
+            store[device_name] = all_data
+
+            if not all(v is None for v in all_data.values()):
+                save_to_csv(device_name, all_data)
+                save_to_sqlite(device_name, all_data)
+
+            print(f"[{device_name}] Updated: {all_data}", flush=True)
         except Exception as e:
             print(f"Error polling {device_name}: {e}")
 
         time.sleep(config.POLL_INTERVAL)
 
-
 def save_to_csv(device_name, result, folder="data"):
-    
     os.makedirs(folder, exist_ok=True)
     filename = os.path.join(folder, f"{device_name}.csv")
     timestamp = datetime.now().isoformat()
