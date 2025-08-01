@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Tanques - Ao Vivo</title>
+  <title>  - Tanques - Ao Vivo</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <style>
@@ -10,140 +10,245 @@
       height: 200px;
       margin-top: 15px;
     }
+    .status-ball {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .status-ball.green {
+      background-color: #00ff00;
+    }
+    .status-ball.red {
+      background-color: #ff0000;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    .status-ball.blink {
+      animation: blink 0.5s ease-in-out 1;
+    }
+
+    .op-status {
+      font-size: 0.9em;
+      margin-top: 4px;
+      color: #ccc;
+    }
+    .info {
+      margin-top: 10px;
+      line-height: 1.6em;
+    }
+    .quantidades {
+      font-size: 0.9em;
+
+      margin-top: 5px;
+      line-height: 1.6em;
+    } 
   </style>
 </head>
 <body>
-{% set page_title = "Tanques - Ao Vivo" %}
+{% set page_title = "  - Tanques - Ao Vivo" %}
 {% include "header.html" %}
 
-  <div class="page">
-    <div class="grid">
-      <div class="card">
-        <h2>Resina Acrílica</h2>
-        <div class="chart-container"><canvas id="level-RA"></canvas></div>
-        <div class="weight">Peso: <span id="weight-RA">—</span> kg</div>
-        <div class="info">
-          Operação: <span id="op-RA" class="status-label">—</span><br>
-          Destino: <span id="dest-RA" class="status-label">—</span>
-        </div>
+<div class="page">
+  <div class="grid">
+    <div class="card">
+      <h2>
+        Resina Acrílica 
+        <span id="status-RA" class="status-ball red"></span>
+      </h2>
+      <div class="op-status" id="opstatus-RA">—</div>
+      <div class="chart-container"><canvas id="level-RA"></canvas></div>
+      <div class="weight">Peso: <span id="weight-RA">—</span> kg</div>
+      <div class="info">
+        Operação: <span id="op-RA" class="status-label">—</span><br>
+        Destino: <span id="dest-RA" class="status-label">—</span>
       </div>
-      <div class="card">
-        <h2>Resina Veova</h2>
-        <div class="chart-container"><canvas id="level-RV"></canvas></div>
-        <div class="weight">Peso: <span id="weight-RV">—</span> kg</div>
-        <div class="info">
-          Operação: <span id="op-RV" class="status-label">—</span><br>
-          Destino: <span id="dest-RV" class="status-label">—</span>
-        </div>
+      <div class="quantidades">
+        Carga solicitada: <span id="qnt-carga-RA">—</span> kg<br>
+        Descarga solicitada: <span id="qnt-descarga-RA">—</span> kg<br>
+        Descarga dosada: <span id="qnt-dosada-RA">—</span> kg
       </div>
-      <div class="card">
-        <h2>Água 1</h2>
-        <div class="chart-container"><canvas id="level-A1"></canvas></div>
-        <div class="weight">Peso: <span id="weight-A1">—</span> kg</div>
-        <div class="info">
-          Operação: <span id="op-A1" class="status-label">—</span><br>
-          Destino: <span id="dest-A1" class="status-label">—</span>
-        </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        Resina Veova
+        <span id="status-RV" class="status-ball red"></span>
+      </h2>
+      <div class="op-status" id="opstatus-RV">—</div>
+      <div class="chart-container"><canvas id="level-RV"></canvas></div>
+      <div class="weight">Peso: <span id="weight-RV">—</span> kg</div>
+      <div class="info">
+        Operação: <span id="op-RV" class="status-label">—</span><br>
+        Destino: <span id="dest-RV" class="status-label">—</span>
       </div>
-      <div class="card">
-        <h2>Água 2</h2>
-        <div class="chart-container"><canvas id="level-A2"></canvas></div>
-        <div class="weight">Peso: <span id="weight-A2">—</span> kg</div>
-        <div class="info">
-          Operação: <span id="op-A2" class="status-label">—</span><br>
-          Destino: <span id="dest-A2" class="status-label">—</span>
-        </div>
+      <div class="quantidades">
+        Carga solicitada: <span id="qnt-carga-RV">—</span> kg<br>
+        Descarga solicitada: <span id="qnt-descarga-RV">—</span> kg<br>
+        Descarga dosada: <span id="qnt-dosada-RV">—</span> kg
+      </div>
+
+    </div>
+
+    <div class="card">
+      <h2>
+        Água 1
+        <span id="status-A1" class="status-ball red"></span>
+      </h2>
+      <div class="op-status" id="opstatus-A1">—</div>
+      <div class="chart-container"><canvas id="level-A1"></canvas></div>
+      <div class="weight">Peso: <span id="weight-A1">—</span> kg</div>
+      <div class="info">
+        Operação: <span id="op-A1" class="status-label">—</span><br>
+        Destino: <span id="dest-A1" class="status-label">—</span>
+      </div>
+      <div class="quantidades">
+        Carga solicitada: <span id="qnt-carga-A1">—</span> kg<br>
+        Descarga solicitada: <span id="qnt-descarga-A1">—</span> kg<br>
+        Descarga dosada: <span id="qnt-dosada-A1">—</span> kg
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>
+        Água 2
+        <span id="status-A2" class="status-ball red"></span>
+      </h2>
+      <div class="op-status" id="opstatus-A2">—</div>
+      <div class="chart-container"><canvas id="level-A2"></canvas></div>
+      <div class="weight">Peso: <span id="weight-A2">—</span> kg</div>
+      <div class="info">
+        Operação: <span id="op-A2" class="status-label">—</span><br>
+        Destino: <span id="dest-A2" class="status-label">—</span>
+      </div>
+      <div class="quantidades">
+        Carga solicitada: <span id="qnt-carga-A2">—</span> kg<br>
+        Descarga solicitada: <span id="qnt-descarga-A2">—</span> kg<br>
+        Descarga dosada: <span id="qnt-dosada-A2">—</span> kg
       </div>
     </div>
   </div>
+</div>
 
-  <script>
-    const tankMapping = {
-      "Tanque_1_Resina": { chart: "level-RA", weight: "weight-RA", op: "op-RA", dest: "dest-RA", max: 500 },
-      "Tanque_2_Resina": { chart: "level-RV", weight: "weight-RV", op: "op-RV", dest: "dest-RV", max: 500 },
-      "Tanque_1_Agua":   { chart: "level-A1", weight: "weight-A1", op: "op-A1", dest: "dest-A1", max: 2500 },
-      "Tanque_2_Agua":   { chart: "level-A2", weight: "weight-A2", op: "op-A2", dest: "dest-A2", max: 2500 }
-    };
+<script>
+const tankMapping = {
+  "Tanque_1_Resina": { chart: "level-RA", weight: "weight-RA", qntCarga: "qnt-carga-RA", qntDesc: "qnt-descarga-RA", qntDosada: "qnt-dosada-RA", op: "op-RA", dest: "dest-RA", status: "status-RA", opstatus: "opstatus-RA", max: 500 },
+  "Tanque_2_Resina": { chart: "level-RV", weight: "weight-RV", qntCarga: "qnt-carga-RV", qntDesc: "qnt-descarga-RV", qntDosada: "qnt-dosada-RV", op: "op-RV", dest: "dest-RV", status: "status-RV", opstatus: "opstatus-RV", max: 500 },
+  "Tanque_1_Agua":   { chart: "level-A1", weight: "weight-A1", qntCarga: "qnt-carga-A1", qntDesc: "qnt-descarga-A1", qntDosada: "qnt-dosada-A1", op: "op-A1", dest: "dest-A1", status: "status-A1", opstatus: "opstatus-A1", max: 2500 },
+  "Tanque_2_Agua":   { chart: "level-A2", weight: "weight-A2", qntCarga: "qnt-carga-A2", qntDesc: "qnt-descarga-A2", qntDosada: "qnt-dosada-A2", op: "op-A2", dest: "dest-A2", status: "status-A2", opstatus: "opstatus-A2", max: 2500 }
+};
 
-    const charts = {};
-    Object.values(tankMapping).forEach(ids => {
-      charts[ids.chart] = createChart(ids.chart, ids.max);
-    });
+const charts = {};
+Object.values(tankMapping).forEach(ids => {
+  charts[ids.chart] = createChart(ids.chart, ids.max);
+});
 
-    function createChart(canvasId, maxValue) {
-      const ctx = document.getElementById(canvasId).getContext('2d');
-      return new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: [''],
-          datasets: [{
-            data: [0],
-            backgroundColor: '#00bfff',
-            borderRadius: 5
-          }]
-        },
-        options: {
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { display: false }, ticks: { display: false } },
-            y: { 
-              min: 0, 
-              max: maxValue, 
-              grid: { color: '#333' }, 
-              ticks: { color: '#e0e0e0' } 
-            }
-          }
-        }
-      });
-    }
-
-    function setLabel(elementId, text, className) {
-      const el = document.getElementById(elementId);
-      el.textContent = text;
-      el.className = `status-label ${className}`;
-    }
-
-    async function fetchTankData() {
-      try {
-        const res = await fetch("/api/live");
-        const data = await res.json();
-
-        Object.entries(tankMapping).forEach(([device, ids]) => {
-          const tankData = data[device];
-          const chartObj = charts[ids.chart];
-
-          if (tankData) {
-            if (typeof tankData["Peso"] !== "undefined") {
-              chartObj.data.datasets[0].data[0] = tankData["Peso"] || 0;
-              chartObj.update();
-              document.getElementById(ids.weight).textContent = tankData["Peso"];
-            } else {
-              document.getElementById(ids.weight).textContent = "—";
-            }
-
-            if (tankData["X002"]) setLabel(ids.op, "Carga", "carga");
-            else if (tankData["X003"]) setLabel(ids.op, "Descarga", "descarga");
-            else setLabel(ids.op, "—", "");
-
-            if (tankData["X004"]) setLabel(ids.dest, "Masseira 1", "m1");
-            else if (tankData["X005"]) setLabel(ids.dest, "Masseira 2", "m2");
-            else setLabel(ids.dest, "—", "");
-
-          } else {
-            chartObj.data.datasets[0].data[0] = 0;
-            chartObj.update();
-            document.getElementById(ids.weight).textContent = "—";
-            setLabel(ids.op, "—", "");
-            setLabel(ids.dest, "—", "");
-          }
-        });
-      } catch (err) {
-        console.error("Error fetching tank data", err);
+function createChart(canvasId, maxValue) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [''],
+      datasets: [{
+        data: [0],
+        backgroundColor: '#00bfff',
+        borderRadius: 5
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { display: false } },
+        y: { min: 0, max: maxValue, grid: { color: '#333' }, ticks: { color: '#e0e0e0' } }
       }
     }
+  });
+}
 
-    setInterval(fetchTankData, 2000);
-    fetchTankData();
-  </script>
+function setLabel(elementId, text, className) {
+  const el = document.getElementById(elementId);
+  el.textContent = text;
+  el.className = `status-label ${className}`;
+}
+
+function setStatusBall(elementId, isActive) {
+  const el = document.getElementById(elementId);
+  
+  // Always keep correct base color
+  el.className = `status-ball ${isActive ? 'green' : 'red'}`;
+  
+  // If green, trigger blink every refresh
+  if (isActive) {
+    el.classList.add("blink");
+    setTimeout(() => el.classList.remove("blink"), 1000);
+  }
+}
+
+
+async function fetchTankData() {
+  try {
+    const res = await fetch("/api/live");
+    const data = await res.json();
+
+    Object.entries(tankMapping).forEach(([device, ids]) => {
+      const tankData = data[device];
+      const chartObj = charts[ids.chart];
+
+      if (tankData) {
+        // Chart and weight
+        const peso = tankData["Peso"];
+        chartObj.data.datasets[0].data[0] = peso;
+        chartObj.update();
+        document.getElementById(ids.weight).textContent = peso || "—";
+        
+        // Quantidades
+        document.getElementById(ids.qntCarga).textContent = tankData["Qnt. Solicitada (carga)"] ?? "—";
+        document.getElementById(ids.qntDesc).textContent = tankData["Qnt. Solicitada (descarga)"] ?? "—";
+        document.getElementById(ids.qntDosada).textContent = tankData["Qnt. Dosada (descarga)"] ?? "—";
+
+        // Status ball (peso not null)
+        setStatusBall(ids.status, peso !== null && peso !== undefined);
+
+        // Operação status (Y004 = Descarga em andamento)
+        document.getElementById(ids.opstatus).textContent = tankData["Descarga em andamento"] ? "Descarga em andamento" : "Parado";
+
+        // Operação
+        if (tankData["Carga selecionada"]) setLabel(ids.op, "Carga", "carga");
+        else if (tankData["Descarga selecionada"]) setLabel(ids.op, "Descarga", "descarga");
+        else setLabel(ids.op, "—", "");
+
+        // Destino
+        if (tankData["Masseira 1 selecionada"]) setLabel(ids.dest, "Masseira 1", "m1");
+        else if (tankData["Masseira 2 selecionada"]) setLabel(ids.dest, "Masseira 2", "m2");
+        else setLabel(ids.dest, "—", "");
+
+      } else {
+        // Reset values if no data
+        chartObj.data.datasets[0].data[0] = 0;
+        chartObj.update();
+        document.getElementById(ids.weight).textContent = "—";
+        document.getElementById(ids.qntCarga).textContent = "—";
+        document.getElementById(ids.qntDesc).textContent = "—";
+        document.getElementById(ids.qntDosada).textContent = "—";
+        setStatusBall(ids.status, false);
+        document.getElementById(ids.opstatus).textContent = "—";
+        setLabel(ids.op, "—", "");
+        setLabel(ids.dest, "—", "");
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching tank data", err);
+  }
+}
+
+setInterval(fetchTankData, 2000);
+fetchTankData();
+</script>
 </body>
 </html>

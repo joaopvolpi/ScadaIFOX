@@ -105,7 +105,7 @@ button:hover {
   color: white;
 }
 .carga { background: orange; }
-.descarga { background: dodgerblue; }
+.descarga { background: rgb(101, 101, 1); }
 .m1 { background: green; }
 .m2 { background: purple; }
 
