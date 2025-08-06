@@ -215,8 +215,8 @@ async function fetchTankData() {
         // Status ball (peso not null)
         setStatusBall(ids.status, peso !== null && peso !== undefined);
 
-        // Operação status (Y004 = Descarga em andamento)
-        document.getElementById(ids.opstatus).textContent = tankData["Descarga em andamento"] ? "Descarga em andamento" : "Parado";
+        // Operação status (Y004 = Operação em andamento)
+        document.getElementById(ids.opstatus).textContent = tankData["Operacao em andamento"] ? "Operação em andamento" : "Parado";
 
         // Operação
         if (tankData["Carga selecionada"]) setLabel(ids.op, "Carga", "carga");

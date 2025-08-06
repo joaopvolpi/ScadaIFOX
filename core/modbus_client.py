@@ -1,10 +1,10 @@
 # core/modbus_client.py
 
+from datetime import datetime, time as dt_time
 from pyModbusTCP.client import ModbusClient
 import time
 import config
 import csv
-from datetime import datetime
 import os
 
 from core.sqlite_helper import save_to_sqlite
@@ -69,6 +69,12 @@ def poll_device(device_name, device_config, store):
     print(f"Starting poller for {device_name}...")
     while True:
         try:
+            now = datetime.now().time()
+            if (dt_time(11, 30) <= now <= dt_time(13, 30)) or (now >= dt_time(17, 0)):
+                print(f"[{device_name}] Horário de almoço (11:30 a 13:30) ou fim do expediente (após 17:00) - Coleta interrompida.")
+                time.sleep(config.POLL_INTERVAL)
+                continue
+
             all_data = {}
             register_map = device_config.get("register_map")
             coil_map = device_config.get("coil_map")

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Resumo Produção</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      padding: 20px;
+    }
+    .left {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .right {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .card {
+      background: #1f1f1f;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    }
+    .masseira-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85em;
+    }
+    table th, table td {
+      padding: 3px;
+      border-bottom: 1px solid #333;
+      text-align: center;
+      color: #ff5415;
+    }
+    table th {
+      color: #e0e0e0;
+    }
+    h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #00bfff;
+      font-size: 1em;
+      text-align: center;
+    }
+    .chart-container {
+      width: 100%;
+      height: 80%;
+    }
+    canvas {
+      background: #121212;
+      border-radius: 6px;
+      padding: 5px;
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
+</head>
+<body>
+{% set page_title = "Resumo Produção" %}
+{% include "header.html" %}
+
+<div class="container">
+  <!-- Lado Esquerdo: Masseiras empilhadas -->
+  <div class="left">
+    <div class="card">
+      <h3>Masseira 1</h3>
+      <div class="masseira-block">
+        <table id="table-m1"></table>
+        <div class="chart-container">
+          <canvas id="graph-m1"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Masseira 2</h3>
+      <div class="masseira-block">
+        <table id="table-m2"></table>
+        <div class="chart-container">
+          <canvas id="graph-m2"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lado Direito: Totais -->
+  <div class="right">
+    <div class="card" id="materias">
+      <h3>Consumo Total - Matérias Primas</h3>
+      <table id="table-materias"></table>
+    </div>
+
+    <div class="card" id="totais">
+      <h3>Total Geral</h3>
+      <table id="table-totais"></table>
+    </div>
+
+    <div class="card">
+      <h3>A Definir</h3>
+      <p style="color:#aaa; text-align:center;">Conteúdo futuro...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadOverview(period = "today") {
+  const res = await fetch(`/api/overview?period=${period}`);
+  const data = await res.json();
+
+  function makeTable(m) {
+    return `
+      <tr>
+        <th>Métrica</th><th>Hoje</th><th>7d</th><th>Mês</th><th>30d</th><th>YTD</th>
+      </tr>
+      <tr><td>Energia (kWh)</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td></tr>
+      <tr><td>Corrente Máx (A)</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td></tr>
+      <tr><td>Água Dosada</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td></tr>
+      <tr><td>Resina Dosada</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td></tr>
+      <tr><td>Nº Taxadas</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td></tr>
+      <tr><td>Tempo Médio (min)</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td></tr>
+      <tr><td>Energia/Taxada (kWh)</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td></tr>
+      <tr><td>Horas Operação</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td></tr>
+    `;
+  }
+
+  document.getElementById("table-m1").innerHTML = makeTable(data.masseiras.Masseira_1);
+  document.getElementById("table-m2").innerHTML = makeTable(data.masseiras.Masseira_2);
+
+  document.getElementById("table-materias").innerHTML = `
+    <tr><th>Métrica</th><th>Hoje</th><th>7d</th><th>Mês</th><th>30d</th><th>YTD</th></tr>
+    <tr><td>Resina Dosada</td><td>${data.materias_primas.resina_dosada}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+    <tr><td>Resina (Real)</td><td>${data.materias_primas.resina_real}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+    <tr><td>Água Dosada</td><td>${data.materias_primas.agua_dosada}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+    <tr><td>Água (Real)</td><td>${data.materias_primas.agua_real}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+  `;
+
+  document.getElementById("table-totais").innerHTML = `
+    <tr><th>Métrica</th><th>Hoje</th><th>7d</th><th>Mês</th><th>30d</th><th>YTD</th></tr>
+    <tr><td>Energia Total (kWh)</td><td>${data.totais_gerais.energia_kWh}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+    <tr><td>Total Taxadas</td><td>${data.totais_gerais.total_taxadas}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+    <tr><td>Horas Operação</td><td>${data.totais_gerais.horas_operacao}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+  `;
+
+  loadGraph("Masseira_1", "graph-m1");
+  loadGraph("Masseira_2", "graph-m2");
+}
+
+async function loadGraph(device, canvasId) {
+  const res = await fetch(`/api/overview/graph?device=${device}`);
+  const data = await res.json();
+
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: data.frequencia.map(p => p.timestamp),
+      datasets: [
+        { label: "Frequência (Hz)", data: data.frequencia.map(p => p.value), borderColor: "#00bfff", fill: false },
+        { label: "Corrente (A)", data: data.corrente.map(p => p.value), borderColor: "#ff4500", fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: "#e0e0e0" } } },
+      scales: {
+        x: { ticks: { color: "#c0c0c0", maxTicksLimit: 4 }, grid: { color: "#333" } },
+        y: { ticks: { color: "#c0c0c0" }, grid: { color: "#333" } }
+      }
+    }
+  });
+}
+
+loadOverview();
+</script>
+</body>
+</html>
