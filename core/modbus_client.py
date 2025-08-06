@@ -40,7 +40,12 @@ def read_device_registers(device, register_map):
             else:
                 raw = regs[0]
             value = raw * multiplier
-            data[reg_name] = round(value, 2)
+
+            # Error handling: discard unrealistic values
+            if value > 100_000_000:
+                data[reg_name] = None
+            else:
+                data[reg_name] = round(value, 2)
         else:
             data[reg_name] = None
     return data
