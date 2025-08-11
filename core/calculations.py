@@ -110,7 +110,7 @@ def calcular_totais_masseiras(periodo: str):
 # ================================
 # Operações de descarga de tanques
 # ================================
-def calcula_operacoes_descarga_tanques_2(periodo: str, tipo):
+def calcula_operacoes_descarga_tanques(periodo: str, tipo):
     """
     Para cada tanque do tipo especificado, retorna:
     {
@@ -244,7 +244,7 @@ def calcula_operacoes_descarga_tanques_2(periodo: str, tipo):
 # ================================
 def _sum_ops_by_masseira(ops_dict):
     """
-    ops_dict = saída de calcula_operacoes_descarga_tanques_2(..., tipo)
+    ops_dict = saída de calcula_operacoes_descarga_tanques(..., tipo)
     Retorna:
     {
       "Masseira_1": {"dosada": float, "real": float, "num": int},
@@ -299,15 +299,15 @@ def calcular_overview(periodo: str):
     """
     Monta o JSON final no formato desejado, usando:
       - calcular_totais_masseiras(periodo)
-      - calcula_operacoes_descarga_tanques_2(periodo, 'Resina')
-      - calcula_operacoes_descarga_tanques_2(periodo, 'Agua')
+      - calcula_operacoes_descarga_tanques(periodo, 'Resina')
+      - calcula_operacoes_descarga_tanques(periodo, 'Agua')
     """
     # 1) KPI das masseiras (energia, horas, corrente)
     kpi_m = calcular_totais_masseiras(periodo)  # {'Masseira_1': {...}, 'Masseira_2': {...}}
 
     # 2) Operações (Resina e Água)
-    ops_resina = calcula_operacoes_descarga_tanques_2(periodo, "Resina")
-    ops_agua   = calcula_operacoes_descarga_tanques_2(periodo, "Agua")
+    ops_resina = calcula_operacoes_descarga_tanques(periodo, "Resina")
+    ops_agua   = calcula_operacoes_descarga_tanques(periodo, "Agua")
 
     # 3) Agregar por masseira
     agg_resina_by_m = _sum_ops_by_masseira(ops_resina)  # dosada/real/num por masseira

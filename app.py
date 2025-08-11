@@ -9,6 +9,7 @@ from flask import Flask, jsonify, request
 
 from core.sqlite_helper import init_db
 from core.modbus_client import poll_device
+from core.calculations import *
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -95,65 +96,64 @@ def api_meta():
 
 @app.route("/api/overview")
 def api_overview():
-    period = request.args.get("period", "today")
-
-    mock_data = {
-        "period": period,
-        "masseiras": {
-            "Masseira_1": {
-                "energia_kWh": 120.5,
-                "corrente_max_A": 32.4,
-                "agua_dosada": 1020.0,
-                "resina_dosada": 850.0,
-                "num_taxadas": 14,
-                "tempo_medio_taxada_min": 12.8,
-                "energia_por_taxada_kWh": 8.6,
-                "horas_operacao": 6.2
-            },
-            "Masseira_2": {
-                "energia_kWh": 115.3,
-                "corrente_max_A": 31.0,
-                "agua_dosada": 980.0,
-                "resina_dosada": 832.0,
-                "num_taxadas": 13,
-                "tempo_medio_taxada_min": 13.5,
-                "energia_por_taxada_kWh": 8.9,
-                "horas_operacao": 5.8
-            }
-        },
-        "materias_primas": {
-            "resina_dosada": 1750.0,
-            "resina_real": 1682.0,
-            "agua_dosada": 2040.0,
-            "agua_real": 1985.0
-        },
-        "totais_gerais": {
-            "energia_kWh": 235.8,
-            "total_taxadas": 27,
-            "horas_operacao": 12.0
-        }
-    }
-    return jsonify(mock_data)
+    period = request.args.get("period", "hoje")
+    data = calcular_overview(period)
+    return jsonify(data)
 
 
 @app.route("/api/overview/graph")
 def api_overview_graph():
     device = request.args.get("device", "Masseira_1")
-    period = request.args.get("period", "today")
 
-    mock_graph_data = {
+    now = datetime.now()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+
+    start_str = start.strftime("%Y-%m-%dT%H:%M:%S")
+    end_str   = end.strftime("%Y-%m-%dT%H:%M:%S")
+
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            timestamp,
+            MAX(CASE WHEN tag = 'OutputFrequency'   THEN value END) AS OutputFrequency,
+            MAX(CASE WHEN tag = 'CurrentMagnitude'  THEN value END) AS CurrentMagnitude
+        FROM readings
+        WHERE device = ?
+          AND tag IN ('OutputFrequency','CurrentMagnitude')
+          AND timestamp >= ?
+          AND timestamp < ?
+        GROUP BY timestamp
+        ORDER BY timestamp ASC
+    """, (device, start_str, end_str))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    def _to_float(x):
+        try:
+            return float(x) if x is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    frequencia = []
+    corrente = []
+    for r in rows:
+        ts = r["timestamp"]
+        of = _to_float(r["OutputFrequency"])
+        cm = _to_float(r["CurrentMagnitude"])
+        frequencia.append({"timestamp": ts, "value": of})
+        corrente.append({"timestamp": ts, "value": cm})
+
+    return jsonify({
         "device": device,
-        "period": period,
-        "frequencia": [
-            {"timestamp": "2025-08-06T08:00:00", "value": 47.5},
-            {"timestamp": "2025-08-06T08:05:00", "value": 48.0}
-        ],
-        "corrente": [
-            {"timestamp": "2025-08-06T08:00:00", "value": 15.2},
-            {"timestamp": "2025-08-06T08:05:00", "value": 16.1}
-        ]
-    }
-    return jsonify(mock_graph_data)
+        "period": "today",
+        "frequencia": frequencia,
+        "corrente": corrente
+    })
 
 
 if __name__ == "__main__":

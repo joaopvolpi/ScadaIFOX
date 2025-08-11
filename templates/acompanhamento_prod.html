@@ -6,66 +6,75 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <style>
+    :root { --gap: 16px; --card-pad: 12px; --mini-chart-h: 120px; }
     .container {
       display: grid;
       grid-template-columns: 2fr 1fr;
-      gap: 20px;
-      padding: 20px;
+      gap: var(--gap);
+      padding: 16px;
     }
-    .left {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .right {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+    .left, .right { display: flex; flex-direction: column; gap: var(--gap); }
     .card {
       background: #1f1f1f;
-      padding: 15px;
+      padding: var(--card-pad);
       border-radius: 8px;
       border: 1px solid #333;
       box-shadow: 0 0 10px rgba(0,0,0,0.4);
     }
+    .card h3, .card h2 { margin: 0 0 8px; color: #fff; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .masseira-block {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       align-items: center;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85em;
-    }
-    table th, table td {
-      padding: 3px;
-      border-bottom: 1px solid #333;
-      text-align: center;
-      color: #ff6229;
-    }
-    table th {
-      color: #e0e0e0;
-    }
-    h3 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: #ffffff;
-      font-size: 1em;
-      text-align: center;
-    }
-    .chart-container {
-      width: 100%;
-      height: 80%;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+    table th, table td { padding: 3px; border-bottom: 1px solid #333; text-align: center; color: #ff6229; }
+    table th { color: #e0e0e0; }
+    .chart-container { width: 100%; height: 240px; }
     canvas {
-      background: #121212;
-      border-radius: 6px;
-      padding: 5px;
-      width: 100% !important;
-      height: 100% !important;
+      background: #121212; border-radius: 6px; padding: 4px;
+      width: 100% !important; height: 100% !important;
+    }
+    /* Status ball */
+    .status-ball { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; }
+    .status-ball.green { background-color: #00ff00; }
+    .status-ball.red { background-color: #ff3b30; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+    .status-ball.blink { animation: blink .8s ease-in-out 1; }
+
+    /* Mini tanks grid */
+    .mini-tanks-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mini-tank {
+      display: grid;
+      grid-template-rows: auto var(--mini-chart-h) auto;
+      gap: 6px;
+    }
+    .mini-title {
+      display: flex; align-items: center; justify-content: space-between;
+      color: #eaeaea; font-size: .9rem; padding: 0 2px;
+    }
+    .mini-canvas { height: var(--mini-chart-h); }
+    .mini-meta { color: #cfcfcf; font-size: .85rem; text-align: center; }
+
+    /* Masseira live metrics (compact) */
+    .live-metrics {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 6px; color: #cfcfcf; font-size: .9rem; text-align: center;
+    }
+
+    /* Tentar evitar scroll: diminuir espaços em telas menores */
+    @media (max-height: 840px) {
+      .chart-container { height: 200px; }
+      :root { --mini-chart-h: 100px; }
+    }
+    @media (max-height: 760px) {
+      .chart-container { height: 180px; }
+      :root { --mini-chart-h: 90px; }
     }
   </style>
 </head>
@@ -77,27 +86,39 @@
   <!-- Lado Esquerdo: Masseiras empilhadas -->
   <div class="left">
     <div class="card">
-      <h3>Masseira 1</h3>
+      <h2>Masseira 1 <span id="status-m1" class="status-ball red"></span></h2>
       <div class="masseira-block">
         <table id="table-m1"></table>
-        <div class="chart-container">
-          <canvas id="graph-m1"></canvas>
+        <div>
+          <div class="chart-container">
+            <canvas id="graph-m1"></canvas>
+          </div>
+          <div class="live-metrics">
+            <div>Frequência: <strong><span id="m1-freq">—</span></strong> Hz</div>
+            <div>Corrente: <strong><span id="m1-corr">—</span></strong> A</div>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h3>Masseira 2</h3>
+      <h2>Masseira 2 <span id="status-m2" class="status-ball red"></span></h2>
       <div class="masseira-block">
         <table id="table-m2"></table>
-        <div class="chart-container">
-          <canvas id="graph-m2"></canvas>
+        <div>
+          <div class="chart-container">
+            <canvas id="graph-m2"></canvas>
+          </div>
+          <div class="live-metrics">
+            <div>Frequência: <strong><span id="m2-freq">—</span></strong> Hz</div>
+            <div>Corrente: <strong><span id="m2-corr">—</span></strong> A</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Lado Direito: Totais -->
+  <!-- Lado Direito: Totais + A Definir -->
   <div class="right">
     <div class="card" id="materias">
       <h3>Consumo Total - Matérias Primas</h3>
@@ -109,83 +130,313 @@
       <table id="table-totais"></table>
     </div>
 
-    <div class="card">
-      <h3>A Definir</h3>
-      <p style="color:#aaa; text-align:center;">Conteúdo futuro...</p>
+    <div class="card" id="adefinir">
+      <h3>Tanques — Resumo ao Vivo</h3>
+      <div class="mini-tanks-grid">
+        <div class="mini-tank">
+          <div class="mini-title">
+            <span>Resina Acrílica</span>
+            <span id="status-RA" class="status-ball red"></span>
+          </div>
+          <div class="mini-canvas"><canvas id="lvl-RA"></canvas></div>
+          <div class="mini-meta">Peso: <strong><span id="peso-RA">—</span></strong> kg</div>
+        </div>
+
+        <div class="mini-tank">
+          <div class="mini-title">
+            <span>Resina Veova</span>
+            <span id="status-RV" class="status-ball red"></span>
+          </div>
+          <div class="mini-canvas"><canvas id="lvl-RV"></canvas></div>
+          <div class="mini-meta">Peso: <strong><span id="peso-RV">—</span></strong> kg</div>
+        </div>
+
+        <div class="mini-tank">
+          <div class="mini-title">
+            <span>Água 1</span>
+            <span id="status-A1" class="status-ball red"></span>
+          </div>
+          <div class="mini-canvas"><canvas id="lvl-A1"></canvas></div>
+          <div class="mini-meta">Peso: <strong><span id="peso-A1">—</span></strong> kg</div>
+        </div>
+
+        <div class="mini-tank">
+          <div class="mini-title">
+            <span>Água 2</span>
+            <span id="status-A2" class="status-ball red"></span>
+          </div>
+          <div class="mini-canvas"><canvas id="lvl-A2"></canvas></div>
+          <div class="mini-meta">Peso: <strong><span id="peso-A2">—</span></strong> kg</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-async function loadOverview(period = "today") {
-  const res = await fetch(`/api/overview?period=${period}`);
-  const data = await res.json();
+/* =======================================================================================
+   BLOCO 1 — Overview (tabelas) — mantém, sem replotar gráficos
+======================================================================================= */
+const PERIODS = [
+  { key: "today",  label: "Hoje" },
+  { key: "7d",     label: "7d" },
+  { key: "month",  label: "Mês" },
+  { key: "30d",    label: "30d" },
+  { key: "ytd",    label: "YTD" }
+];
+const charts = {};        // charts de linha das masseiras (live)
+const miniCharts = {};    // charts de barra dos tanques (card A Definir)
+const LIVE_CHART_MAX_POINTS = 180; // ~15 min com refresh de 5s
+let refreshTimer = null;   // tabelas
+let refreshTimer5s = null; // live
 
-  function makeTable(m) {
-    return `
-      <tr>
-        <th>Métrica</th><th>Hoje</th><th>7d</th><th>Mês</th><th>30d</th><th>YTD</th>
-      </tr>
-      <tr><td>Energia (kWh)</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td><td>${m.energia_kWh}</td></tr>
-      <tr><td>Corrente Máx (A)</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td><td>${m.corrente_max_A}</td></tr>
-      <tr><td>Água Dosada</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td><td>${m.agua_dosada}</td></tr>
-      <tr><td>Resina Dosada</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td><td>${m.resina_dosada}</td></tr>
-      <tr><td>Nº Taxadas</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td><td>${m.num_taxadas}</td></tr>
-      <tr><td>Tempo Médio (min)</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td><td>${m.tempo_medio_taxada_min}</td></tr>
-      <tr><td>Energia/Taxada (kWh)</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td><td>${m.energia_por_taxada_kWh}</td></tr>
-      <tr><td>Horas Operação</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td><td>${m.horas_operacao}</td></tr>
-    `;
+function fmt(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (typeof v === "number") {
+    const isIntLike = Math.abs(v - Math.round(v)) < 1e-9;
+    return v.toLocaleString("pt-BR", {
+      maximumFractionDigits: isIntLike ? 0 : 2,
+      minimumFractionDigits: isIntLike ? 0 : 2
+    });
   }
+  return String(v);
+}
+function toNum(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
 
-  document.getElementById("table-m1").innerHTML = makeTable(data.masseiras.Masseira_1);
-  document.getElementById("table-m2").innerHTML = makeTable(data.masseiras.Masseira_2);
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} em ${url}`);
+  return res.json();
+}
+async function fetchOverview(period) { return fetchJSON(`/api/overview?period=${encodeURIComponent(period)}`); }
 
-  document.getElementById("table-materias").innerHTML = `
-    <tr><th>Métrica</th><th>Hoje</th><th>7d</th><th>Mês</th><th>30d</th><th>YTD</th></tr>
-    <tr><td>Resina Dosada</td><td>${data.materias_primas.resina_dosada}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-    <tr><td>Resina (Real)</td><td>${data.materias_primas.resina_real}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-    <tr><td>Água Dosada</td><td>${data.materias_primas.agua_dosada}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-    <tr><td>Água (Real)</td><td>${data.materias_primas.agua_real}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-  `;
-
-  document.getElementById("table-totais").innerHTML = `
-    <tr><th>Métrica</th><th>Hoje</th><th>7d</th><th>Mês</th><th>30d</th><th>YTD</th></tr>
-    <tr><td>Energia Total (kWh)</td><td>${data.totais_gerais.energia_kWh}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-    <tr><td>Total Taxadas</td><td>${data.totais_gerais.total_taxadas}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-    <tr><td>Horas Operação</td><td>${data.totais_gerais.horas_operacao}</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
-  `;
-
-  loadGraph("Masseira_1", "graph-m1");
-  loadGraph("Masseira_2", "graph-m2");
+function tableHeader() {
+  const cols = PERIODS.map(p => `<th>${p.label}</th>`).join("");
+  return `<tr><th>Métrica</th>${cols}</tr>`;
 }
 
-async function loadGraph(device, canvasId) {
-  const res = await fetch(`/api/overview/graph?device=${device}`);
-  const data = await res.json();
+function valuesAcrossPeriods(dataByPeriod, pathFn) {
+  return PERIODS.map(p => {
+    const d = dataByPeriod[p.key];
+    try { return fmt(pathFn(d)); } catch { return "—"; }
+  });
+}
 
-  const ctx = document.getElementById(canvasId).getContext("2d");
-  new Chart(ctx, {
+function renderMasseiraTable(masseiraName, tableId, dataByPeriod) {
+  const rows = [];
+  const getM = (d, f) => d?.masseiras?.[masseiraName]?.[f];
+
+  rows.push(["Nº Taxadas",           valuesAcrossPeriods(dataByPeriod, d => getM(d, "num_taxadas"))]);
+  rows.push(["Horas Operação",       valuesAcrossPeriods(dataByPeriod, d => getM(d, "horas_operacao"))]);
+  rows.push(["Tempo Médio (min)",    valuesAcrossPeriods(dataByPeriod, d => getM(d, "tempo_medio_taxada_min"))]);
+  rows.push(["Energia (kWh)",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "energia_kWh"))]);
+  rows.push(["Energia/Taxada (kWh)", valuesAcrossPeriods(dataByPeriod, d => getM(d, "energia_por_taxada_kWh"))]);
+  rows.push(["Corrente Máx (A)",     valuesAcrossPeriods(dataByPeriod, d => getM(d, "corrente_max_A"))]);
+  rows.push(["Água Dosada",          valuesAcrossPeriods(dataByPeriod, d => getM(d, "agua_dosada"))]);
+  rows.push(["Água (Real)",          valuesAcrossPeriods(dataByPeriod, d => getM(d, "agua_real_dosada"))]);
+  rows.push(["Resina Dosada",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_dosada"))]);
+  rows.push(["Resina (Real)",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_real_dosada"))]);
+
+  const html = tableHeader() + rows.map(([label, vals]) =>
+    `<tr><td>${label}</td>${vals.map(v => `<td>${v}</td>`).join("")}</tr>`).join("");
+
+  document.getElementById(tableId).innerHTML = html;
+}
+
+function renderMateriasTable(tableId, dataByPeriod) {
+  const getAgg = (d, f) => d?.materias_primas?.[f];
+  const rows = [];
+  rows.push(["Resina Dosada", valuesAcrossPeriods(dataByPeriod, d => getAgg(d, "resina_dosada"))]);
+  rows.push(["Resina (Real)", valuesAcrossPeriods(dataByPeriod, d => getAgg(d, "resina_real"))]);
+  rows.push(["Água Dosada",   valuesAcrossPeriods(dataByPeriod, d => getAgg(d, "agua_dosada"))]);
+  rows.push(["Água (Real)",   valuesAcrossPeriods(dataByPeriod, d => getAgg(d, "agua_real"))]);
+
+  const html = tableHeader() + rows.map(([label, vals]) =>
+    `<tr><td>${label}</td>${vals.map(v => `<td>${v}</td>`).join("")}</tr>`).join("");
+
+  document.getElementById(tableId).innerHTML = html;
+}
+
+function renderTotaisTable(tableId, dataByPeriod) {
+  const getTot = (d, f) => d?.totais_gerais?.[f];
+  const rows = [];
+  rows.push(["Total Taxadas",       valuesAcrossPeriods(dataByPeriod, d => getTot(d, "total_taxadas"))]);
+  rows.push(["Horas Operação",      valuesAcrossPeriods(dataByPeriod, d => getTot(d, "horas_operacao"))]);
+  rows.push(["Energia Total (kWh)", valuesAcrossPeriods(dataByPeriod, d => getTot(d, "energia_kWh"))]);
+
+  const html = tableHeader() + rows.map(([label, vals]) =>
+    `<tr><td>${label}</td>${vals.map(v => `<td>${v}</td>`).join("")}</tr>`).join("");
+
+  document.getElementById(tableId).innerHTML = html;
+}
+
+async function loadOverviewAllPeriods() {
+  try {
+    const results = await Promise.allSettled(PERIODS.map(p => fetchOverview(p.key)));
+    const dataByPeriod = {};
+    results.forEach((r, i) => dataByPeriod[PERIODS[i].key] = r.status === "fulfilled" ? r.value : null);
+
+    renderMasseiraTable("Masseira_1", "table-m1", dataByPeriod);
+    renderMasseiraTable("Masseira_2", "table-m2", dataByPeriod);
+    renderMateriasTable("table-materias", dataByPeriod);
+    renderTotaisTable("table-totais", dataByPeriod);
+
+    // IMPORTANTE: não carrega mais gráficos históricos aqui
+  } catch (e) { console.error("Falha overview:", e); }
+}
+
+/* =======================================================================================
+   BLOCO 2 — Live (/api/live): tanques + gráficos das masseiras (rolling)
+======================================================================================= */
+const tankMapping = {
+  "Tanque_1_Resina": { chart: "lvl-RA", peso: "peso-RA", status: "status-RA", max: 500 },
+  "Tanque_2_Resina": { chart: "lvl-RV", peso: "peso-RV", status: "status-RV", max: 500 },
+  "Tanque_1_Agua":   { chart: "lvl-A1", peso: "peso-A1", status: "status-A1", max: 2500 },
+  "Tanque_2_Agua":   { chart: "lvl-A2", peso: "peso-A2", status: "status-A2", max: 2500 }
+};
+
+function setStatusBall(elId, isActive) {
+  const el = document.getElementById(elId);
+  el.className = `status-ball ${isActive ? 'green' : 'red'}`;
+  if (isActive) {
+    el.classList.add('blink');
+    setTimeout(() => el.classList.remove('blink'), 800);
+  }
+}
+
+function createMiniBarChart(canvasId, maxValue) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx, {
+    type: 'bar',
+    data: { labels: [''], datasets: [{ data: [0], backgroundColor: '#00bfff', borderRadius: 5 }] },
+    options: {
+      plugins: { legend: { display: false } },
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false }, ticks: { display: false } },
+        y: { min: 0, max: maxValue, grid: { color: '#333' }, ticks: { color: '#e0e0e0' } }
+      }
+    }
+  });
+}
+
+function createLiveLineChart(canvasId) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx, {
     type: "line",
     data: {
-      labels: data.frequencia.map(p => p.timestamp),
+      labels: [],
       datasets: [
-        { label: "Frequência (Hz)", data: data.frequencia.map(p => p.value), borderColor: "#00bfff", fill: false },
-        { label: "Corrente (A)", data: data.corrente.map(p => p.value), borderColor: "#ff4500", fill: false }
+        { label: "Frequência (Hz)", data: [], borderColor: "#00bfff", fill: false },
+        { label: "Corrente (A)",    data: [], borderColor: "#ff4500", fill: false }
       ]
     },
     options: {
+      animation: false,
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { labels: { color: "#e0e0e0" } } },
       scales: {
-        x: { ticks: { color: "#c0c0c0", maxTicksLimit: 4 }, grid: { color: "#333" } },
+        x: { ticks: { color: "#c0c0c0", maxTicksLimit: 6, autoSkip: true }, grid: { color: "#333" } },
         y: { ticks: { color: "#c0c0c0" }, grid: { color: "#333" } }
       }
     }
   });
 }
 
-loadOverview();
+function pushLivePoint(chart, label, freqVal, corrVal) {
+  chart.data.labels.push(label);
+  chart.data.datasets[0].data.push(toNum(freqVal)); // pode ser null => "gap" visual
+  chart.data.datasets[1].data.push(toNum(corrVal));
+  // limitar tamanho
+  if (chart.data.labels.length > LIVE_CHART_MAX_POINTS) {
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+    chart.data.datasets[1].data.shift();
+  }
+  chart.update('none');
+}
+
+// cria mini charts (tanques) e gráficos de linha (masseiras) uma vez
+for (const dev in tankMapping) {
+  const { chart, max } = tankMapping[dev];
+  miniCharts[chart] = createMiniBarChart(chart, max);
+}
+charts["graph-m1"] = createLiveLineChart("graph-m1");
+charts["graph-m2"] = createLiveLineChart("graph-m2");
+
+async function fetchLiveAndRender() {
+  try {
+    const live = await fetchJSON('/api/live');
+
+    // Atualiza TANQUES no card “A Definir”
+    for (const dev in tankMapping) {
+      const ids = tankMapping[dev];
+      const t = live[dev];
+      const pesoVal = t ? t["Peso"] : null;
+
+      setStatusBall(ids.status, pesoVal !== null && pesoVal !== undefined);
+
+      const chart = miniCharts[ids.chart];
+      chart.data.datasets[0].data[0] = (typeof pesoVal === 'number') ? pesoVal : 0;
+      chart.update('none');
+      document.getElementById(ids.peso).textContent = fmt(pesoVal);
+    }
+
+    // Atualiza MASSEIRAS: status + freq/corrente ao vivo + adiciona pontos nos gráficos
+    const m1 = live["Masseira_1"] || {};
+    const m2 = live["Masseira_2"] || {};
+    const m1Active = [m1.OutputFrequency, m1.CurrentMagnitude, m1.OutputPower, m1.PercentageLoad, m1.RPM]
+      .some(v => v !== null && v !== undefined);
+    const m2Active = [m2.OutputFrequency, m2.CurrentMagnitude, m2.OutputPower, m2.PercentageLoad, m2.RPM]
+      .some(v => v !== null && v !== undefined);
+
+    setStatusBall('status-m1', m1Active);
+    setStatusBall('status-m2', m2Active);
+
+    document.getElementById('m1-freq').textContent = fmt(m1.OutputFrequency);
+    document.getElementById('m1-corr').textContent = fmt(m1.CurrentMagnitude);
+    document.getElementById('m2-freq').textContent = fmt(m2.OutputFrequency);
+    document.getElementById('m2-corr').textContent = fmt(m2.CurrentMagnitude);
+
+    // rótulo de tempo curto (HH:MM:SS) para os gráficos
+    const label = new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    // Empurra pontos para os gráficos (null cria "gap" visual quando não há dado)
+    pushLivePoint(charts["graph-m1"], label, m1.OutputFrequency, m1.CurrentMagnitude);
+    pushLivePoint(charts["graph-m2"], label, m2.OutputFrequency, m2.CurrentMagnitude);
+
+  } catch (err) {
+    console.error('Erro ao buscar /api/live:', err);
+    // Em erro, marcamos status como inativo (opcional)
+    setStatusBall('status-m1', false);
+    setStatusBall('status-m2', false);
+    for (const dev in tankMapping) setStatusBall(tankMapping[dev].status, false);
+  }
+}
+
+/* =======================================================================================
+   Inicialização
+======================================================================================= */
+async function init() {
+  // Overview inicial + refresh (apenas tabelas)
+  await loadOverviewAllPeriods();
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadOverviewAllPeriods, 30 * 60 * 1000); // 30 min
+
+  // Live inicial + refresh a cada 5s (também atualiza gráficos de linha)
+  await fetchLiveAndRender();
+  if (refreshTimer5s) clearInterval(refreshTimer5s);
+  refreshTimer5s = setInterval(fetchLiveAndRender, 5000);
+}
+
+init();
+
+// limpar timers ao sair
+window.addEventListener('beforeunload', () => {
+  if (refreshTimer) clearInterval(refreshTimer);
+  if (refreshTimer5s) clearInterval(refreshTimer5s);
+});
 </script>
 </body>
 </html>
