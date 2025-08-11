@@ -226,16 +226,16 @@ function renderMasseiraTable(masseiraName, tableId, dataByPeriod) {
   const rows = [];
   const getM = (d, f) => d?.masseiras?.[masseiraName]?.[f];
 
-  rows.push(["Nº Taxadas",           valuesAcrossPeriods(dataByPeriod, d => getM(d, "num_taxadas"))]);
+  rows.push(["Nº Tachadas",           valuesAcrossPeriods(dataByPeriod, d => getM(d, "num_tachadas"))]);
   rows.push(["Horas Operação",       valuesAcrossPeriods(dataByPeriod, d => getM(d, "horas_operacao"))]);
-  rows.push(["Tempo Médio (min)",    valuesAcrossPeriods(dataByPeriod, d => getM(d, "tempo_medio_taxada_min"))]);
+  rows.push(["Tempo Médio (min)",    valuesAcrossPeriods(dataByPeriod, d => getM(d, "tempo_medio_tachada_min"))]);
   rows.push(["Energia (kWh)",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "energia_kWh"))]);
-  rows.push(["Energia/Taxada (kWh)", valuesAcrossPeriods(dataByPeriod, d => getM(d, "energia_por_taxada_kWh"))]);
+  rows.push(["Energia/Tachada (kWh)", valuesAcrossPeriods(dataByPeriod, d => getM(d, "energia_por_tachada_kWh"))]);
   rows.push(["Corrente Máx (A)",     valuesAcrossPeriods(dataByPeriod, d => getM(d, "corrente_max_A"))]);
   rows.push(["Água Dosada",          valuesAcrossPeriods(dataByPeriod, d => getM(d, "agua_dosada"))]);
-  rows.push(["Água (Real)",          valuesAcrossPeriods(dataByPeriod, d => getM(d, "agua_real_dosada"))]);
   rows.push(["Resina Dosada",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_dosada"))]);
   rows.push(["Resina (Real)",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_real_dosada"))]);
+  rows.push(["Resina (Real)/Tachada",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_real_por_tachada"))]);
 
   const html = tableHeader() + rows.map(([label, vals]) =>
     `<tr><td>${label}</td>${vals.map(v => `<td>${v}</td>`).join("")}</tr>`).join("");
@@ -260,7 +260,7 @@ function renderMateriasTable(tableId, dataByPeriod) {
 function renderTotaisTable(tableId, dataByPeriod) {
   const getTot = (d, f) => d?.totais_gerais?.[f];
   const rows = [];
-  rows.push(["Total Taxadas",       valuesAcrossPeriods(dataByPeriod, d => getTot(d, "total_taxadas"))]);
+  rows.push(["Total Tachadas",       valuesAcrossPeriods(dataByPeriod, d => getTot(d, "total_tachadas"))]);
   rows.push(["Horas Operação",      valuesAcrossPeriods(dataByPeriod, d => getTot(d, "horas_operacao"))]);
   rows.push(["Energia Total (kWh)", valuesAcrossPeriods(dataByPeriod, d => getTot(d, "energia_kWh"))]);
 

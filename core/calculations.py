@@ -330,9 +330,9 @@ def calcular_overview(periodo: str):
         res_m = agg_resina_by_m.get(dev, {"dosada": 0.0, "real": 0.0, "num": 0})
         ag_m  = agg_agua_by_m.get(dev,   {"dosada": 0.0, "real": 0.0, "num": 0})
 
-        num_taxadas = int(res_m["num"])  # número de operações de resina
-        tempo_medio_min = (horas * 60.0 / num_taxadas) if num_taxadas > 0 else 0.0
-        energia_por_taxada = (energia / num_taxadas) if num_taxadas > 0 else 0.0
+        num_tachadas = int(res_m["num"])  # número de operações de resina
+        tempo_medio_min = (horas * 60.0 / num_tachadas) if num_tachadas > 0 else 0.0
+        energia_por_tachada = (energia / num_tachadas) if num_tachadas > 0 else 0.0
 
         masseiras_out[dev] = {
             "energia_kWh": round(energia, 2),
@@ -341,9 +341,9 @@ def calcular_overview(periodo: str):
             "agua_real_dosada": round(float(ag_m["real"]), 2),
             "resina_dosada": round(float(res_m["dosada"]), 2),
             "resina_real_dosada": round(float(res_m["real"]), 2),
-            "num_taxadas": num_taxadas,
-            "tempo_medio_taxada_min": round(tempo_medio_min, 2),
-            "energia_por_taxada_kWh": round(energia_por_taxada, 2),
+            "num_tachadas": num_tachadas,
+            "tempo_medio_tachada_min": round(tempo_medio_min, 2),
+            "energia_por_tachada_kWh": round(energia_por_tachada, 2),
             "horas_operacao": round(horas, 2),
         }
 
@@ -358,7 +358,7 @@ def calcular_overview(periodo: str):
     # 7) Totais gerais
     energia_total = round(sum(m.get("energia_kWh", 0.0) for m in kpi_m.values()), 2)
     horas_total   = round(sum(m.get("horas_operacao", 0.0) for m in kpi_m.values()), 2)
-    total_taxadas = int(tot_resina["num"])
+    total_tachadas = int(tot_resina["num"])
 
     overview = {
         "period": periodo,
@@ -366,7 +366,7 @@ def calcular_overview(periodo: str):
         "materias_primas": materias_primas_out,
         "totais_gerais": {
             "energia_kWh": energia_total,
-            "total_taxadas": total_taxadas,
+            "total_tachadas": total_tachadas,
             "horas_operacao": horas_total,
         },
     }
