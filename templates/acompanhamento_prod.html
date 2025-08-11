@@ -176,13 +176,14 @@
 <script>
 /* =======================================================================================
    BLOCO 1 — Overview (tabelas) — mantém, sem replotar gráficos
+   Agora busca tudo de uma vez em /api/overview_multi?periods=...
 ======================================================================================= */
 const PERIODS = [
-  { key: "today",  label: "Hoje" },
-  { key: "7d",     label: "7d" },
-  { key: "month",  label: "Mês" },
-  { key: "30d",    label: "30d" },
-  { key: "ytd",    label: "YTD" }
+  { key: "hoje",  label: "Hoje" },
+  { key: "7d",    label: "7d" },
+  { key: "mtd",   label: "Mês" },
+  { key: "30d",   label: "30d" },
+  { key: "ytd",   label: "YTD" }
 ];
 const charts = {};        // charts de linha das masseiras (live)
 const miniCharts = {};    // charts de barra dos tanques (card A Definir)
@@ -203,12 +204,22 @@ function fmt(v) {
 }
 function toNum(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
 
-async function fetchJSON(url) {
-  const res = await fetch(url);
+async function fetchJSON(url, options) {
+  const res = await fetch(url, options);
   if (!res.ok) throw new Error(`HTTP ${res.status} em ${url}`);
   return res.json();
 }
-async function fetchOverview(period) { return fetchJSON(`/api/overview?period=${encodeURIComponent(period)}`); }
+
+/** NOVO: busca todos os períodos em uma única chamada */
+async function fetchOverviewMulti(periodKeys) {
+  const qs = encodeURIComponent(periodKeys.join(','));
+  return fetchJSON(`/api/overview_multi?periods=${qs}`);
+}
+
+/** Fallback legado: busca um período por vez (usado se o multi não existir) */
+async function fetchOverview(period) {
+  return fetchJSON(`/api/overview?period=${encodeURIComponent(period)}`);
+}
 
 function tableHeader() {
   const cols = PERIODS.map(p => `<th>${p.label}</th>`).join("");
@@ -271,18 +282,25 @@ function renderTotaisTable(tableId, dataByPeriod) {
 }
 
 async function loadOverviewAllPeriods() {
+  const periodKeys = PERIODS.map(p => p.key);
+  let dataByPeriod = {};
+
   try {
-    const results = await Promise.allSettled(PERIODS.map(p => fetchOverview(p.key)));
-    const dataByPeriod = {};
-    results.forEach((r, i) => dataByPeriod[PERIODS[i].key] = r.status === "fulfilled" ? r.value : null);
+    // Tenta rota nova (multi)
+    const multi = await fetchOverviewMulti(periodKeys);
+    // multi já deve vir como { hoje: {...}, '7d': {...}, ... }
+    dataByPeriod = multi || {};
+  } catch (errMulti) {
+    console.warn("overview_multi indisponível, caindo para chamadas individuais:", errMulti);
+    // Fallback: chamadas individuais (mantém compatibilidade)
+    const results = await Promise.allSettled(periodKeys.map(fetchOverview));
+    results.forEach((r, i) => dataByPeriod[periodKeys[i]] = r.status === "fulfilled" ? r.value : null);
+  }
 
-    renderMasseiraTable("Masseira_1", "table-m1", dataByPeriod);
-    renderMasseiraTable("Masseira_2", "table-m2", dataByPeriod);
-    renderMateriasTable("table-materias", dataByPeriod);
-    renderTotaisTable("table-totais", dataByPeriod);
-
-    // IMPORTANTE: não carrega mais gráficos históricos aqui
-  } catch (e) { console.error("Falha overview:", e); }
+  renderMasseiraTable("Masseira_1", "table-m1", dataByPeriod);
+  renderMasseiraTable("Masseira_2", "table-m2", dataByPeriod);
+  renderMateriasTable("table-materias", dataByPeriod);
+  renderTotaisTable("table-totais", dataByPeriod);
 }
 
 /* =======================================================================================
@@ -348,7 +366,6 @@ function pushLivePoint(chart, label, freqVal, corrVal) {
   chart.data.labels.push(label);
   chart.data.datasets[0].data.push(toNum(freqVal)); // pode ser null => "gap" visual
   chart.data.datasets[1].data.push(toNum(corrVal));
-  // limitar tamanho
   if (chart.data.labels.length > LIVE_CHART_MAX_POINTS) {
     chart.data.labels.shift();
     chart.data.datasets[0].data.shift();
@@ -399,16 +416,12 @@ async function fetchLiveAndRender() {
     document.getElementById('m2-freq').textContent = fmt(m2.OutputFrequency);
     document.getElementById('m2-corr').textContent = fmt(m2.CurrentMagnitude);
 
-    // rótulo de tempo curto (HH:MM:SS) para os gráficos
     const label = new Date().toLocaleTimeString('pt-BR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-    // Empurra pontos para os gráficos (null cria "gap" visual quando não há dado)
     pushLivePoint(charts["graph-m1"], label, m1.OutputFrequency, m1.CurrentMagnitude);
     pushLivePoint(charts["graph-m2"], label, m2.OutputFrequency, m2.CurrentMagnitude);
 
   } catch (err) {
     console.error('Erro ao buscar /api/live:', err);
-    // Em erro, marcamos status como inativo (opcional)
     setStatusBall('status-m1', false);
     setStatusBall('status-m2', false);
     for (const dev in tankMapping) setStatusBall(tankMapping[dev].status, false);
@@ -419,7 +432,7 @@ async function fetchLiveAndRender() {
    Inicialização
 ======================================================================================= */
 async function init() {
-  // Overview inicial + refresh (apenas tabelas)
+  // Overview inicial + refresh (apenas tabelas), agora com chamada única
   await loadOverviewAllPeriods();
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(loadOverviewAllPeriods, 30 * 60 * 1000); // 30 min

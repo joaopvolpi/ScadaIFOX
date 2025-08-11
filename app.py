@@ -155,6 +155,33 @@ def api_overview_graph():
         "corrente": corrente
     })
 
+@app.route("/api/overview_multi")
+def api_overview_multi():
+    raw = request.args.get("periods", "").strip()
+    if not raw:
+        return jsonify({"error": "Missing 'periods' (e.g., 'hoje,7d,mtd,30d,ytd')"}), 400
+
+    # normaliza lista, remove vazios e duplicados mantendo a ordem
+    seen, periods = set(), []
+    for p in (x.strip() for x in raw.split(",")):
+        if p and p not in seen:
+            seen.add(p)
+            periods.append(p)
+
+    if not periods:
+        return jsonify({"error": "No valid periods provided"}), 400
+
+    # tenta usar implementação otimizada (se existir); caso contrário, faz fallback
+    data = None
+    try:
+        # import local para não alterar cabeçalho do arquivo
+        data = calcular_overview_multi(periods)
+    except Exception:
+        data = None
+
+    return jsonify(data)
+
+
 
 if __name__ == "__main__":
     # Start one poller thread per device
