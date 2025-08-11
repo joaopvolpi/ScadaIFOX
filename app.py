@@ -37,10 +37,6 @@ def masseiras_history():
 def tanques_live():
     return render_template("tanques_live.html")
 
-@app.route("/tanques_history")
-def tanques_history():
-    return render_template("tanques_history.html")
-
 @app.route("/acompanhamento_prod")
 def acompanhamento_prod():
     return render_template("acompanhamento_prod.html")
