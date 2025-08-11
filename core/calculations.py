@@ -42,7 +42,7 @@ def calcular_totais_masseiras(periodo: str):
             MAX(CASE WHEN tag = 'OutputFrequency' THEN value END)      AS OutputFrequency,
             MAX(CASE WHEN tag = 'CurrentMagnitude' THEN value END)     AS CurrentMagnitude
         FROM readings
-        WHERE device LIKE 'Masseira%'
+        WHERE device IN ('Masseira_1', 'Masseira_2')
           AND tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
           AND timestamp BETWEEN ? AND ?
         GROUP BY timestamp, device
@@ -128,6 +128,8 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
+    tipo = ('Tanque_1_Agua', 'Tanque_2_Agua') if tipo=='Agua' else ('Tanque_1_Resina', 'Tanque_2_Resina')
+
     c.execute("""
         SELECT
             timestamp,
@@ -140,7 +142,7 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
             MAX(CASE WHEN tag = 'Qnt. Solicitada (descarga)' THEN value END)     AS QtdSolicDesc,
             MAX(CASE WHEN tag = 'Peso' THEN value END)                           AS Peso
         FROM readings
-        WHERE device LIKE ?
+        WHERE device IN (?, ?)
           AND tag IN ('Descarga selecionada','Operacao em andamento','Botão Liga',
                       'Valv. Desc. Mass. 1','Valv. Desc. Mass. 2',
                       'Qnt. Solicitada (descarga)','Peso')
@@ -150,7 +152,7 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
            AND BotaoLiga IS NOT NULL
            AND Peso IS NOT NULL
         ORDER BY device, timestamp
-    """, (f"%{tipo}", start, end))
+    """, (tipo[0], tipo[1], start, end))
 
     # Estruturas
     resultado = defaultdict(lambda: {"Masseira_1": [], "Masseira_2": []})

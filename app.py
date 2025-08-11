@@ -7,7 +7,7 @@ import threading
 from flask import render_template
 from flask import Flask, jsonify, request
 
-from core.sqlite_helper import init_db
+from core.sqlite_helper import *
 from core.modbus_client import poll_device
 from core.calculations import *
 
@@ -15,7 +15,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
 init_db()
-
+ensure_indexes()
 # Shared in-memory store for latest polled data
 DATA_STORE = {}
 
