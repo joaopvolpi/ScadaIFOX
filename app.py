@@ -96,6 +96,21 @@ def api_overview():
     data = calcular_overview(period)
     return jsonify(data)
 
+@app.route("/api/overview_multi")
+def api_overview_multi():
+    """
+    Sem parâmetros. Retorna:
+    {
+      "hoje": {...},
+      "7d": {...},
+      "mtd": {...},
+      "30d": {...},
+      "ytd": {...}
+    }
+    """
+    results = gerar_overview_multi()
+
+    return jsonify(results)
 
 @app.route("/api/overview/graph")
 def api_overview_graph():

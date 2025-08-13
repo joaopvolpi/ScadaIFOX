@@ -208,8 +208,9 @@ async function fetchJSON(url) {
   if (!res.ok) throw new Error(`HTTP ${res.status} em ${url}`);
   return res.json();
 }
-async function fetchOverview(period) { return fetchJSON(`/api/overview?period=${encodeURIComponent(period)}`); }
-
+async function fetchOverviewMulti() {
+  return fetchJSON('/api/overview_multi');
+}
 function tableHeader() {
   const cols = PERIODS.map(p => `<th>${p.label}</th>`).join("");
   return `<tr><th>Métrica</th>${cols}</tr>`;
@@ -235,7 +236,6 @@ function renderMasseiraTable(masseiraName, tableId, dataByPeriod) {
   rows.push(["Água Dosada",          valuesAcrossPeriods(dataByPeriod, d => getM(d, "agua_dosada"))]);
   rows.push(["Resina Dosada",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_dosada"))]);
   rows.push(["Resina (Real)",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_real_dosada"))]);
-  rows.push(["Resina (Real)/Tachada",        valuesAcrossPeriods(dataByPeriod, d => getM(d, "resina_real_por_tachada"))]);
 
   const html = tableHeader() + rows.map(([label, vals]) =>
     `<tr><td>${label}</td>${vals.map(v => `<td>${v}</td>`).join("")}</tr>`).join("");
@@ -272,17 +272,18 @@ function renderTotaisTable(tableId, dataByPeriod) {
 
 async function loadOverviewAllPeriods() {
   try {
-    const results = await Promise.allSettled(PERIODS.map(p => fetchOverview(p.key)));
-    const dataByPeriod = {};
-    results.forEach((r, i) => dataByPeriod[PERIODS[i].key] = r.status === "fulfilled" ? r.value : null);
+    const dataByPeriod = await fetchOverviewMulti();
 
+    // Renderizações reaproveitam a mesma estrutura (dataByPeriod["hoje"|"7d"|...])
     renderMasseiraTable("Masseira_1", "table-m1", dataByPeriod);
     renderMasseiraTable("Masseira_2", "table-m2", dataByPeriod);
     renderMateriasTable("table-materias", dataByPeriod);
     renderTotaisTable("table-totais", dataByPeriod);
 
-    // IMPORTANTE: não carrega mais gráficos históricos aqui
-  } catch (e) { console.error("Falha overview:", e); }
+    // IMPORTANTE: continua sem plotar históricos aqui
+  } catch (e) {
+    console.error("Falha overview_multi:", e);
+  }
 }
 
 /* =======================================================================================

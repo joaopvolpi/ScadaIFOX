@@ -248,7 +248,6 @@ def _sum_ops_by_masseira(ops_dict):
         out[k]["real"] = round(out[k]["real"], 2)
     return out
 
-
 def _sum_ops_total(ops_dict):
     """
     Totais globais (todas as masseiras).
@@ -267,7 +266,6 @@ def _sum_ops_total(ops_dict):
     tot["dosada"] = round(tot["dosada"], 2)
     tot["real"] = round(tot["real"], 2)
     return tot
-
 
 # ================================
 # OVERVIEW (apenas monta o JSON final)
@@ -366,3 +364,137 @@ def calcular_overview(periodo: str):
         print(f"  {nome}: {dur:.4f} s")
 
     return overview
+
+
+# ================================
+# MULTI OVERVIEW
+# ================================
+
+def _slice_ops_by_period(ops_dict, start_iso, end_iso):
+    """Recorta operações por 'horario' dentro de [start,end], mantendo a estrutura."""
+    if not ops_dict:
+        return {}
+    start_dt = datetime.fromisoformat(start_iso)
+    end_dt   = datetime.fromisoformat(end_iso)
+    out = {}
+    for tanque, destinos in ops_dict.items():
+        m1, m2 = [], []
+        for destino, lst in destinos.items():
+            if not lst:
+                continue
+            target = m1 if destino == "Masseira_1" else m2
+            for op in lst:
+                h = op.get("horario")
+                if not h:
+                    continue
+                try:
+                    hdt = datetime.fromisoformat(h)
+                except Exception:
+                    continue
+                if start_dt <= hdt <= end_dt:
+                    target.append(op)
+        if m1 or m2:
+            out[tanque] = {"Masseira_1": m1, "Masseira_2": m2}
+    return out
+
+def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all):
+    """Monta o JSON do overview para um período específico, cortando as operações pré-carregadas."""
+    start_iso, end_iso = _periodo_para_datas(periodo)
+
+    # KPIs dependem da janela -> calcula por período
+    kpi_m = calcular_totais_masseiras_sql(periodo)
+
+    # Recortes das operações
+    ops_resina_p = _slice_ops_by_period(ops_resina_all, start_iso, end_iso)
+    ops_agua_p   = _slice_ops_by_period(ops_agua_all,   start_iso, end_iso)
+
+    # Agregações
+    agg_resina_by_m = _sum_ops_by_masseira(ops_resina_p)
+    agg_agua_by_m   = _sum_ops_by_masseira(ops_agua_p)
+    tot_resina = _sum_ops_total(ops_resina_p)
+    tot_agua   = _sum_ops_total(ops_agua_p)
+
+    # Montagem por masseira
+    masseiras_out = {}
+    for dev, kpi in kpi_m.items():
+        energia = float(kpi.get("energia_kWh", 0.0))
+        horas   = float(kpi.get("horas_operacao", 0.0))
+        corrmax = kpi.get("corrente_max", None)
+
+        res_m = agg_resina_by_m.get(dev, {"dosada": 0.0, "real": 0.0, "num": 0})
+        ag_m  = agg_agua_by_m.get(dev,   {"dosada": 0.0, "real": 0.0, "num": 0})
+
+        num_tachadas = int(res_m["num"])
+        tempo_medio_min = (horas * 60.0 / num_tachadas) if num_tachadas > 0 else 0.0
+        energia_por_tachada = (energia / num_tachadas) if num_tachadas > 0 else 0.0
+
+        masseiras_out[dev] = {
+            "energia_kWh": round(energia, 2),
+            "corrente_max_A": (round(float(corrmax), 2) if corrmax is not None else None),
+            "agua_dosada": round(float(ag_m["dosada"]), 2),
+            "agua_real_dosada": round(float(ag_m["real"]), 2),
+            "resina_dosada": round(float(res_m["dosada"]), 2),
+            "resina_real_dosada": round(float(res_m["real"]), 2),
+            "num_tachadas": num_tachadas,
+            "tempo_medio_tachada_min": round(tempo_medio_min, 2),
+            "energia_por_tachada_kWh": round(energia_por_tachada, 2),
+            "horas_operacao": round(horas, 2),
+        }
+
+    materias_primas_out = {
+        "resina_dosada": tot_resina["dosada"],
+        "resina_real":   tot_resina["real"],
+        "agua_dosada":   tot_agua["dosada"],
+        "agua_real":     tot_agua["real"],
+    }
+
+    energia_total = round(sum(m.get("energia_kWh", 0.0) for m in kpi_m.values()), 2)
+    horas_total   = round(sum(m.get("horas_operacao", 0.0) for m in kpi_m.values()), 2)
+    total_tachadas = int(tot_resina["num"])
+
+    return {
+        "period": periodo,
+        "masseiras": masseiras_out,
+        "materias_primas": materias_primas_out,
+        "totais_gerais": {
+            "energia_kWh": energia_total,
+            "total_tachadas": total_tachadas,
+            "horas_operacao": horas_total,
+        },
+    }
+
+def gerar_overview_multi():
+    """
+    Sem parâmetros. Períodos fixos: hoje, 7d, mtd, 30d, ytd.
+    - Chama calcula_operacoes_descarga_tanques apenas 2x no maior período (ytd)
+    - Recorta em memória para os demais
+    - KPIs de masseira calculados por período
+    """
+    PERIODOS = ["hoje", "7d", "mtd", "30d", "ytd"]
+    max_period = "ytd"
+
+    timings = {}
+    t0 = time.perf_counter()
+
+    # 2 chamadas ao DB (mais pesadas) no maior período
+    t1 = time.perf_counter()
+    ops_resina_all = calcula_operacoes_descarga_tanques(max_period, "Resina")
+    timings["ops_resina_all"] = time.perf_counter() - t1
+
+    t1 = time.perf_counter()
+    ops_agua_all   = calcula_operacoes_descarga_tanques(max_period, "Agua")
+    timings["ops_agua_all"] = time.perf_counter() - t1
+
+    # Monta saída para cada período fixo
+    out = {}
+    for p in PERIODOS:
+        t1 = time.perf_counter()
+        out[p] = _build_overview_for_period(p, ops_resina_all, ops_agua_all)
+        timings[f"build_{p}"] = time.perf_counter() - t1
+
+    timings["total"] = time.perf_counter() - t0
+    print("\n[DEBUG] overview_multi_fixed timings:")
+    for k, v in timings.items():
+        print(f"  {k}: {v:.4f}s")
+
+    return out
