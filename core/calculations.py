@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from config import DB_FILE
 from collections import defaultdict
+import time
 
 # ================================
 # Funções auxiliares
@@ -29,83 +30,57 @@ def _periodo_para_datas(periodo: str):
 # ================================
 # KPI Masseiras
 # ================================
-def calcular_totais_masseiras(periodo: str):
+def calcular_totais_masseiras_sql(periodo: str):
     start, end = _periodo_para_datas(periodo)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
+    # Consulta otimizada: pivot + integração no SQL
     c.execute("""
+        WITH pivot AS (
+            SELECT
+                device,
+                timestamp,
+                MAX(CASE WHEN tag='OutputPower' THEN value END) AS power,
+                MAX(CASE WHEN tag='OutputFrequency' THEN value END) AS freq,
+                MAX(CASE WHEN tag='CurrentMagnitude' THEN value END) AS curr_mag
+            FROM readings
+            WHERE device IN ('Masseira_1','Masseira_2')
+              AND tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
+              AND timestamp BETWEEN ? AND ?
+            GROUP BY timestamp, device
+        )
         SELECT
-            timestamp,
             device,
-            MAX(CASE WHEN tag = 'OutputPower' THEN value END)          AS OutputPower,
-            MAX(CASE WHEN tag = 'OutputFrequency' THEN value END)      AS OutputFrequency,
-            MAX(CASE WHEN tag = 'CurrentMagnitude' THEN value END)     AS CurrentMagnitude
-        FROM readings
-        WHERE device IN ('Masseira_1', 'Masseira_2')
-          AND tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
-          AND timestamp BETWEEN ? AND ?
-        GROUP BY timestamp, device
-        ORDER BY device, timestamp
+            SUM(prev_power * dt_h) AS energia_kWh,
+            SUM(CASE WHEN prev_freq > 0 THEN dt_h ELSE 0 END) AS horas_operacao,
+            MAX(curr_mag) AS corrente_max
+        FROM (
+            SELECT
+                device,
+                power,
+                freq,
+                curr_mag,
+                LAG(power) OVER (PARTITION BY device ORDER BY timestamp) AS prev_power,
+                LAG(freq) OVER (PARTITION BY device ORDER BY timestamp) AS prev_freq,
+                (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 AS dt_h
+            FROM pivot
+        )
+        GROUP BY device;
     """, (start, end))
 
-    energia_por_dev = defaultdict(float)
-    horas_por_dev = defaultdict(float)
-    corrente_max_por_dev = {}  # guarda o maior CurrentMagnitude observado no período
+    # Monta resultado no mesmo formato original
+    result = {f"Masseira_{i}": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": None} for i in (1, 2)}
 
-    last_ts = {}
-    last_power = {}
-    last_freq = {}
-
-    for ts_str, dev, power, freq, curr_mag in c.fetchall():
-        # Atualiza corrente máxima por device (se existir leitura)
-        if curr_mag is not None:
-            cm = float(curr_mag)
-            prev_max = corrente_max_por_dev.get(dev)
-            if prev_max is None or cm > prev_max:
-                corrente_max_por_dev[dev] = cm
-
-        # Se não há power nem freq neste timestamp, não há integração a fazer
-        if power is None and freq is None:
-            last_ts[dev] = datetime.fromisoformat(ts_str)  # ainda atualiza o relógio
-            continue
-
-        ts = datetime.fromisoformat(ts_str)
-
-        if dev in last_ts:
-            dt_h = (ts - last_ts[dev]).total_seconds() / 3600.0
-
-            # Integra energia com potência anterior (kW)
-            prev_power = last_power.get(dev)
-            if prev_power is not None:
-                energia_por_dev[dev] += float(prev_power) * dt_h
-
-            # Soma horas quando frequência anterior > 0
-            prev_freq = last_freq.get(dev)
-            if prev_freq is not None and float(prev_freq) > 0:
-                horas_por_dev[dev] += dt_h
-
-        # Atualiza estado
-        last_ts[dev] = ts
-        if power is not None:
-            last_power[dev] = float(power)
-        if freq is not None:
-            last_freq[dev] = float(freq)
+    for dev, energia, horas, corrente in c.fetchall():
+        result[dev] = {
+            "energia_kWh": round(energia or 0.0, 2),
+            "horas_operacao": round(horas or 0.0, 2),
+            "corrente_max": (round(corrente, 2) if corrente is not None else None),
+        }
 
     conn.close()
-
-    # Monta saída por device (inclui corrente_max, None se não houve leitura)
-    devices = set(energia_por_dev.keys()) | set(horas_por_dev.keys()) | set(corrente_max_por_dev.keys())
-    result = {
-        dev: {
-            "energia_kWh": round(energia_por_dev.get(dev, 0.0), 2),
-            "horas_operacao": round(horas_por_dev.get(dev, 0.0), 2),
-            "corrente_max": (round(corrente_max_por_dev[dev], 2) if dev in corrente_max_por_dev else None),
-        }
-        for dev in devices
-    }
     return result
-
 
 # ================================
 # Operações de descarga de tanques
@@ -150,7 +125,11 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
         GROUP BY timestamp, device
         HAVING OpAndamento IS NOT NULL
            AND BotaoLiga IS NOT NULL
+           AND DescargaSelecionada IS NOT NULL
+           AND V1 IS NOT NULL
+           AND V2 IS NOT NULL
            AND Peso IS NOT NULL
+           AND QtdSolicDesc IS NOT NULL
         ORDER BY device, timestamp
     """, (tipo[0], tipo[1], start, end))
 
@@ -164,33 +143,32 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
 
     # -----------------------------------------------------------------------------------
     for i, (ts_str, dev, d_sel, b_liga, op_and, v1, v2, qtd_solic, peso) in enumerate(rows):
-        op = None if op_and is None else int(op_and)
-        d = 0 if d_sel is None else int(d_sel)
-        b = 0 if b_liga is None else int(b_liga)
-        v1i = 0 if v1 is None else int(v1)
-        v2i = 0 if v2 is None else int(v2)
-        ts = datetime.fromisoformat(ts_str)  
+        op = int(op_and)
+        d = int(d_sel)
+        b = int(b_liga)
+        v1i = int(v1)
+        v2i = int(v2)
+        ts = datetime.fromisoformat(ts_str)
 
         prev = last_op.get(dev, 0)
 
         # --- Borda de subida (início de operação)
-        if op is not None and prev == 0 and op == 1 and d == 1 and b == 1:
+        if prev == 0 and op == 1 and d == 1 and b == 1:
             destino = "Masseira_1" if (v1i == 1 and v2i == 0) else "Masseira_2"
             operacao_aberta[dev] = {
                 "inicio_ts": ts_str,
                 "destino": destino,
-                "qtd_solic_desc": float(qtd_solic) if qtd_solic is not None else None,
-                "peso_inicio": float(peso) if peso is not None else None,
-                "peso_fim": float(peso) if peso is not None else None,
+                "qtd_solic_desc": float(qtd_solic),
+                "peso_inicio": float(peso),
+                "peso_fim": float(peso),
             }
 
         # --- Durante a operação (op == 1): atualiza peso_fim com última leitura válida
         if dev in operacao_aberta and op == 1:
-            if peso is not None:
-                operacao_aberta[dev]["peso_fim"] = float(peso)
+            operacao_aberta[dev]["peso_fim"] = float(peso)
 
         # --- Borda de descida (fim de operação)
-        if op is not None and prev == 1 and op == 0:
+        if prev == 1 and op == 0:
             # Só processa se realmente houver operação aberta
             if dev not in operacao_aberta:
                 # queda órfã: não havia início válido
@@ -201,13 +179,12 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
             peso_fim_ajustado = operacao_aberta[dev].get("peso_fim")
 
             j = i + 1
-            while j < len(rows) and rows[j][1] == dev:
-                ts_j_str = rows[j][0]
+            while j < len(rows) and rows[j][1] == dev: # coluna 'device'
+                ts_j_str = rows[j][0] # coluna 'timestamp'
                 peso_j = rows[j][8]  # coluna 'Peso'
                 ts_j = datetime.fromisoformat(ts_j_str)
                 if ts_j >= alvo:
-                    if peso_j is not None:
-                        peso_fim_ajustado = float(peso_j)
+                    peso_fim_ajustado = float(peso_j)
                     break
                 j += 1
 
@@ -225,9 +202,7 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
                     "peso_fim": op_reg["peso_fim"],
                 })
 
-        # Atualiza estado anterior somente quando op não é NULL
-        if op is not None:
-            last_op[dev] = op
+        last_op[dev] = op
 
     # Se terminar o período com operação aberta, fecha usando último peso visto (não há “+10s” disponíveis)
     for dev, op_reg in list(operacao_aberta.items()):
@@ -304,33 +279,47 @@ def calcular_overview(periodo: str):
       - calcula_operacoes_descarga_tanques(periodo, 'Resina')
       - calcula_operacoes_descarga_tanques(periodo, 'Agua')
     """
-    # 1) KPI das masseiras (energia, horas, corrente)
-    kpi_m = calcular_totais_masseiras(periodo)  # {'Masseira_1': {...}, 'Masseira_2': {...}}
+    timings = {}
 
-    # 2) Operações (Resina e Água)
+    t0 = time.perf_counter()
+    kpi_m = calcular_totais_masseiras_sql(periodo)
+    timings["calcular_totais_masseiras"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     ops_resina = calcula_operacoes_descarga_tanques(periodo, "Resina")
-    ops_agua   = calcula_operacoes_descarga_tanques(periodo, "Agua")
+    timings["calcula_operacoes_descarga_tanques_resina"] = time.perf_counter() - t0
 
-    # 3) Agregar por masseira
-    agg_resina_by_m = _sum_ops_by_masseira(ops_resina)  # dosada/real/num por masseira
-    agg_agua_by_m   = _sum_ops_by_masseira(ops_agua)
+    t0 = time.perf_counter()
+    ops_agua = calcula_operacoes_descarga_tanques(periodo, "Agua")
+    timings["calcula_operacoes_descarga_tanques_agua"] = time.perf_counter() - t0
 
-    # 4) Agregar totais globais de matérias-primas
+    t0 = time.perf_counter()
+    agg_resina_by_m = _sum_ops_by_masseira(ops_resina)
+    timings["_sum_ops_by_masseira_resina"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    agg_agua_by_m = _sum_ops_by_masseira(ops_agua)
+    timings["_sum_ops_by_masseira_agua"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     tot_resina = _sum_ops_total(ops_resina)
-    tot_agua   = _sum_ops_total(ops_agua)
+    timings["_sum_ops_total_resina"] = time.perf_counter() - t0
 
-    # 5) Montar parte das masseiras no formato desejado
+    t0 = time.perf_counter()
+    tot_agua = _sum_ops_total(ops_agua)
+    timings["_sum_ops_total_agua"] = time.perf_counter() - t0
+
+    # Montar parte das masseiras
     masseiras_out = {}
     for dev, kpi in kpi_m.items():
         energia = float(kpi.get("energia_kWh", 0.0))
         horas   = float(kpi.get("horas_operacao", 0.0))
         corrmax = kpi.get("corrente_max", None)
 
-        # dados de resina/água por masseira
         res_m = agg_resina_by_m.get(dev, {"dosada": 0.0, "real": 0.0, "num": 0})
         ag_m  = agg_agua_by_m.get(dev,   {"dosada": 0.0, "real": 0.0, "num": 0})
 
-        num_tachadas = int(res_m["num"])  # número de operações de resina
+        num_tachadas = int(res_m["num"])
         tempo_medio_min = (horas * 60.0 / num_tachadas) if num_tachadas > 0 else 0.0
         energia_por_tachada = (energia / num_tachadas) if num_tachadas > 0 else 0.0
 
@@ -347,7 +336,7 @@ def calcular_overview(periodo: str):
             "horas_operacao": round(horas, 2),
         }
 
-    # 6) Materiais totais
+    # Materiais totais
     materias_primas_out = {
         "resina_dosada": tot_resina["dosada"],
         "resina_real":   tot_resina["real"],
@@ -355,7 +344,7 @@ def calcular_overview(periodo: str):
         "agua_real":     tot_agua["real"],
     }
 
-    # 7) Totais gerais
+    # Totais gerais
     energia_total = round(sum(m.get("energia_kWh", 0.0) for m in kpi_m.values()), 2)
     horas_total   = round(sum(m.get("horas_operacao", 0.0) for m in kpi_m.values()), 2)
     total_tachadas = int(tot_resina["num"])
@@ -370,5 +359,10 @@ def calcular_overview(periodo: str):
             "horas_operacao": horas_total,
         },
     }
+
+    # Imprimir tempos
+    print("\n[DEBUG] Tempos de execução:")
+    for nome, dur in timings.items():
+        print(f"  {nome}: {dur:.4f} s")
 
     return overview
