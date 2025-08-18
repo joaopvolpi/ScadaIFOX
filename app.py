@@ -55,14 +55,19 @@ def api_history():
     start = request.args.get("start")
     end = request.args.get("end")
 
-    conn = sqlite3.connect("data/scada.db")
+    conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    placeholders = ','.join('?' * len(tags))
+
+    placeholders = ",".join("?" * len(tags))
     sql = f"""
-        SELECT timestamp, tag, value FROM readings
+        SELECT
+            (strftime('%s', timestamp) * 1000) AS ts_ms,  -- numeric timestamp (ms)
+            tag,
+            value
+        FROM readings
         WHERE device = ?
-        AND tag IN ({placeholders})
-        AND timestamp BETWEEN ? AND ?
+          AND tag IN ({placeholders})
+          AND timestamp BETWEEN ? AND ?
         ORDER BY timestamp ASC
     """
     params = [device] + tags + [start, end]
@@ -71,12 +76,9 @@ def api_history():
     rows = c.fetchall()
     conn.close()
 
-    # Arrumando dados para o front
     data = {}
-    for ts, tag, value in rows:
-        if tag not in data:
-            data[tag] = []
-        data[tag].append({"timestamp": ts, "value": value})
+    for ts_ms, tag, value in rows:
+        data.setdefault(tag, []).append({"t": int(ts_ms), "v": float(value) if value is not None else None})
 
     return jsonify(data)
 

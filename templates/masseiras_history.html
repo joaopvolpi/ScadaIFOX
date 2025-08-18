@@ -61,11 +61,11 @@
       <br><br>
 
       <label>Tags:</label><br>
-      <label><input type="checkbox" value="RPM" checked> RPM</label>
+      <label><input type="checkbox" value="RPM"> RPM</label>
       <label><input type="checkbox" value="OutputFrequency" checked> Output Frequency</label>
       <label><input type="checkbox" value="CurrentMagnitude" checked> Current Magnitude</label>
-      <label><input type="checkbox" value="PercentageLoad" checked> Percentage Load</label>
-      <label><input type="checkbox" value="OutputPower" checked> Output Power</label>
+      <label><input type="checkbox" value="PercentageLoad"> Percentage Load</label>
+      <label><input type="checkbox" value="OutputPower"> Output Power</label>
 
       <div class="date-range">
         <label>De:
@@ -85,21 +85,15 @@
 
   <script>
     flatpickr("#start", {
-      enableTime: true,
-      noCalendar: false,
-      dateFormat: "d/m/Y H:i",
-      time_24hr: true,
-      locale: "pt"
+      enableTime: true, noCalendar: false, dateFormat: "d/m/Y H:i", time_24hr: true, locale: "pt"
     });
     flatpickr("#end", {
-      enableTime: true,
-      noCalendar: false,
-      dateFormat: "d/m/Y H:i",
-      time_24hr: true,
-      locale: "pt"
+      enableTime: true, noCalendar: false, dateFormat: "d/m/Y H:i", time_24hr: true, locale: "pt"
     });
 
     let chart;
+
+    Chart.defaults.elements.line.borderWidth = 2;
 
     async function loadHistory() {
       const device = document.getElementById("device").value;
@@ -109,7 +103,7 @@
       const end = document.getElementById("end")._flatpickr.input.value;
 
       const startISO = start ? toISO(start) : "2000-01-01T00:00:00";
-      const endISO = end ? toISO(end) : "2100-01-01T00:00:00";
+      const endISO   = end   ? toISO(end)   : "2100-01-01T00:00:00";
 
       const params = new URLSearchParams();
       params.append("device", device);
@@ -120,13 +114,16 @@
       const res = await fetch(`/api/history?${params.toString()}`);
       const data = await res.json();
 
-      const timestamps = [];
+      // Build datasets using numeric timestamps directly
+      let minTime = Number.POSITIVE_INFINITY;
+      let maxTime = Number.NEGATIVE_INFINITY;
+
       const datasets = Object.keys(data).map(tag => {
         const points = data[tag].map(r => {
-          const dateStr = r.timestamp.replace(' ', 'T');
-          const x = new Date(dateStr);
-          const y = Number(r.value);
-          timestamps.push(x);
+          const x = r.t;      // epoch ms (number) from API
+          const y = Number(r.v);
+          if (x < minTime) minTime = x;
+          if (x > maxTime) maxTime = x;
           return { x, y };
         });
 
@@ -135,61 +132,65 @@
           data: points,
           borderColor: getRandomColor(),
           fill: false,
-          tension: 0.1
+          tension: 0.1,
+          pointRadius: 0
         };
       });
 
-      let minTime, maxTime;
-      if (timestamps.length > 0) {
-        minTime = new Date(Math.min(...timestamps));
-        maxTime = new Date(Math.max(...timestamps));
-      }
-
       const ctx = document.getElementById("historyChart").getContext("2d");
-      if (chart) chart.destroy();
 
-      chart = new Chart(ctx, {
-        type: "line",
-        data: { datasets },
-        options: {
-          parsing: false,
-          spanGaps: 1000 * 20 , // 20 segundos - não liga segmentos no gráfico se há um intervalo maior que 20s entre eles
-          responsive: true,
-          plugins: {
-            legend: { labels: { color: "#e0e0e0" } },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const date = new Date(context.parsed.x);
-                  return `${context.dataset.label}: ${context.parsed.y} em ${date.toLocaleString('pt-BR')}`;
+      if (!chart) {
+        // Create ONCE
+        chart = new Chart(ctx, {
+          type: "line",
+          data: { datasets },
+          options: {
+            parsing: false,
+            responsive: true,
+            spanGaps: 1000 * 20,
+            plugins: {
+              legend: { labels: { color: "#e0e0e0" } },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const date = new Date(context.parsed.x); // x is numeric ms
+                    return `${context.dataset.label}: ${context.parsed.y} em ${date.toLocaleString('pt-BR')}`;
+                  }
                 }
               }
-            }
-          },
-          scales: {
-            x: {
-              type: "time",
-              time: {
-                tooltipFormat: 'dd/MM HH:mm',
-                displayFormats: {
-                  second: 'dd/MM HH:mm',
-                  minute: 'dd/MM HH:mm',
-                  hour: 'dd/MM HH:mm'
-                }
-              },
-              title: { display: true, text: "Tempo", color: "#e0e0e0" },
-              ticks: { color: "#c0c0c0" },
-              grid: { color: "#333" },
-              ...(minTime && maxTime ? { min: minTime, max: maxTime } : {})
             },
-            y: {
-              title: { display: true, text: "Valor", color: "#e0e0e0" },
-              ticks: { color: "#c0c0c0" },
-              grid: { color: "#333" }
+            scales: {
+              x: {
+                type: "time",
+                time: {
+                  tooltipFormat: 'dd/MM HH:mm',
+                  displayFormats: { second:'dd/MM HH:mm', minute:'dd/MM HH:mm', hour:'dd/MM HH:mm' }
+                },
+                title: { display: true, text: "Tempo", color: "#e0e0e0" },
+                ticks: { color: "#c0c0c0" },
+                grid: { color: "#333" },
+                ...(isFinite(minTime) && isFinite(maxTime) ? { min: minTime, max: maxTime } : {})
+              },
+              y: {
+                title: { display: true, text: "Valor", color: "#e0e0e0" },
+                ticks: { color: "#c0c0c0" },
+                grid: { color: "#333" }
+              }
             }
           }
+        });
+      } else {
+        // Update IN PLACE (no destroy/recreate)
+        chart.data.datasets = datasets;
+        if (isFinite(minTime) && isFinite(maxTime)) {
+          chart.options.scales.x.min = minTime;
+          chart.options.scales.x.max = maxTime;
+        } else {
+          delete chart.options.scales.x.min;
+          delete chart.options.scales.x.max;
         }
-      });
+        chart.update('none'); // no animation, very fast
+      }
     }
 
     function toISO(dateStr) {
@@ -203,5 +204,6 @@
       return colors[Math.floor(Math.random() * colors.length)];
     }
   </script>
+
 </body>
 </html>
