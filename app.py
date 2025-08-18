@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request
 from core.sqlite_helper import *
 from core.modbus_client import poll_device
 from core.calculations import *
+from core.report import *
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -89,7 +90,6 @@ def api_meta():
     meta.update({name: {"unit": info["unit"]} for name, info in config.TANQUES_REGISTER_MAP.items()})
     return jsonify(meta)
 
-
 @app.route("/api/overview")
 def api_overview():
     period = request.args.get("period", "hoje")
@@ -166,6 +166,19 @@ def api_overview_graph():
         "corrente": corrente
     })
 
+@app.route("/relatorios/overview.pdf")
+def baixar_relatorio_overview():
+    """
+    Rota para disparar o download do PDF.
+    """
+    pdf_bytes = generate_overview_report()
+    filename = f"Relatorio_Producao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf", 
+        as_attachment=True,
+        download_name=filename,
+    )
 
 if __name__ == "__main__":
     # Start one poller thread per device

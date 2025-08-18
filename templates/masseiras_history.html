@@ -153,6 +153,7 @@
         data: { datasets },
         options: {
           parsing: false,
+          spanGaps: 1000 * 20 , // 20 segundos - não liga segmentos no gráfico se há um intervalo maior que 20s entre eles
           responsive: true,
           plugins: {
             legend: { labels: { color: "#e0e0e0" } },
