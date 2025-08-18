@@ -1,18 +1,12 @@
 # core/modbus_client.py
 
-from datetime import datetime, time as dt_time
-from pyModbusTCP.client import ModbusClient
 import time
 import config
-import csv
-import os
 
-from core.sqlite_helper import save_to_sqlite
+from pyModbusTCP.client import ModbusClient
+from datetime import datetime, time as dt_time
 
-
-# ------------------------------
-# Modbus Client Functions
-# ------------------------------
+from core.sqlite_helper import save_to_sqlite, save_to_csv
 
 def combine_16bit_big_endian(high_word, low_word):
     return (high_word << 16) | (low_word & 0xFFFF)
@@ -41,7 +35,7 @@ def read_device_registers(device, register_map):
                 raw = regs[0]
             value = raw * multiplier
 
-            # Error handling: discard unrealistic values
+            # Error handling: descartando valores errados de coleta (evita erros de float...)
             if value > 1_000_000:
                 data[reg_name] = None
             else:
@@ -74,11 +68,13 @@ def poll_device(device_name, device_config, store):
     print(f"Starting poller for {device_name}...")
     while True:
         try:
+            # ---------- Verifica se é hora de coleta
             now = datetime.now().time()
             if (dt_time(11, 30) <= now <= dt_time(13, 30)) or (now >= dt_time(17, 0)):
                 print(f"[{device_name}] Horário de almoço (11:30 a 13:30) ou fim do expediente (após 17:00) - Coleta interrompida.")
                 time.sleep(config.POLL_INTERVAL)
                 continue
+            # ----------
 
             all_data = {}
             register_map = device_config.get("register_map")
@@ -94,7 +90,7 @@ def poll_device(device_name, device_config, store):
 
             store[device_name] = all_data
 
-            if not all(v is None for v in all_data.values()):
+            if not all(v is None for v in all_data.values()): # Se todos os valores forem nulos, não salva
                 save_to_csv(device_name, all_data)
                 save_to_sqlite(device_name, all_data)
 
@@ -103,20 +99,3 @@ def poll_device(device_name, device_config, store):
             print(f"Error polling {device_name}: {e}")
 
         time.sleep(config.POLL_INTERVAL)
-
-def save_to_csv(device_name, result, folder="data"):
-    os.makedirs(folder, exist_ok=True)
-    filename = os.path.join(folder, f"{device_name}.csv")
-    timestamp = datetime.now().isoformat()
-    fieldnames = ["timestamp"] + list(result.keys())
-    file_exists = os.path.isfile(filename)
-
-    with open(filename, mode="a", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        if not file_exists:
-            writer.writeheader()
-
-        row = {"timestamp": timestamp}
-        row.update(result)
-        writer.writerow(row)

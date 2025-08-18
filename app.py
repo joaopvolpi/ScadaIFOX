@@ -1,5 +1,4 @@
 import os
-import csv
 import config
 import sqlite3
 import threading
@@ -16,29 +15,30 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
 init_db()
-ensure_indexes()
-# Shared in-memory store for latest polled data
+ensure_indexes() # Apenas deixa as consultas no banco de dados mais rápidas
+
+# Estrutura de dados para armazenar as leituras mais recentes - É compartilhada entre threads
 DATA_STORE = {}
 
 # Template Routes
 
-@app.route("/")
+@app.route("/") # Rota principal
 def main_menu():
     return render_template("index.html")
 
-@app.route("/masseiras_live")
+@app.route("/masseiras_live") # Rota para visualização ao vivo das masseiras
 def masseiras_live():
     return render_template("masseiras_live.html")
 
-@app.route("/masseiras_history")
+@app.route("/masseiras_history") # Rota para histórico das masseiras
 def masseiras_history():
     return render_template("masseiras_history.html")
 
-@app.route("/tanques_live")
+@app.route("/tanques_live") # Rota para visualização ao vivo dos tanques
 def tanques_live():
     return render_template("tanques_live.html")
 
-@app.route("/acompanhamento_prod")
+@app.route("/acompanhamento_prod") # Rota para acompanhamento da produção - Métricas, KPIs...
 def acompanhamento_prod():
     return render_template("acompanhamento_prod.html")
 
@@ -69,10 +69,9 @@ def api_history():
 
     c.execute(sql, params)
     rows = c.fetchall()
-    # print(rows)
     conn.close()
 
-    # Group by tag for frontend
+    # Arrumando dados para o front
     data = {}
     for ts, tag, value in rows:
         if tag not in data:
@@ -82,7 +81,7 @@ def api_history():
     return jsonify(data)
 
 @app.route("/api/meta")
-def api_meta():
+def api_meta(): # Leitura de unidades, metadados...
     meta = {}
     # Masseiras
     meta.update({name: {"unit": info["unit"]} for name, info in config.VFD_REGISTER_MAP.items()})
@@ -99,7 +98,7 @@ def api_overview():
 @app.route("/api/overview_multi")
 def api_overview_multi():
     """
-    Sem parâmetros. Retorna:
+    Retorna:
     {
       "hoje": {...},
       "7d": {...},
@@ -111,60 +110,6 @@ def api_overview_multi():
     results = gerar_overview_multi()
 
     return jsonify(results)
-
-@app.route("/api/overview/graph")
-def api_overview_graph():
-    device = request.args.get("device", "Masseira_1")
-
-    now = datetime.now()
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=1)
-
-    start_str = start.strftime("%Y-%m-%dT%H:%M:%S")
-    end_str   = end.strftime("%Y-%m-%dT%H:%M:%S")
-
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT
-            timestamp,
-            MAX(CASE WHEN tag = 'OutputFrequency'   THEN value END) AS OutputFrequency,
-            MAX(CASE WHEN tag = 'CurrentMagnitude'  THEN value END) AS CurrentMagnitude
-        FROM readings
-        WHERE device = ?
-          AND tag IN ('OutputFrequency','CurrentMagnitude')
-          AND timestamp >= ?
-          AND timestamp < ?
-        GROUP BY timestamp
-        ORDER BY timestamp ASC
-    """, (device, start_str, end_str))
-
-    rows = cur.fetchall()
-    conn.close()
-
-    def _to_float(x):
-        try:
-            return float(x) if x is not None else None
-        except (TypeError, ValueError):
-            return None
-
-    frequencia = []
-    corrente = []
-    for r in rows:
-        ts = r["timestamp"]
-        of = _to_float(r["OutputFrequency"])
-        cm = _to_float(r["CurrentMagnitude"])
-        frequencia.append({"timestamp": ts, "value": of})
-        corrente.append({"timestamp": ts, "value": cm})
-
-    return jsonify({
-        "device": device,
-        "period": "today",
-        "frequencia": frequencia,
-        "corrente": corrente
-    })
 
 @app.route("/relatorios/overview.pdf")
 def baixar_relatorio_overview():
@@ -181,10 +126,10 @@ def baixar_relatorio_overview():
     )
 
 if __name__ == "__main__":
-    # Start one poller thread per device
+    # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
     for device_name, device_config in config.DEVICES.items():
         t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
-        t.daemon = True
+        t.daemon = True # Rodando em segundo plano
         t.start()
 
     # Start Flask server

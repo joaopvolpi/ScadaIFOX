@@ -35,7 +35,7 @@ def calcular_totais_masseiras_sql(periodo: str):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
-    # Consulta otimizada: pivot + integração no SQL
+    # Cálculo das integrais (para calcular potência em kWh) e tempo de operação (freq das masseiras > 0) direto no SQL
     c.execute("""
         WITH pivot AS (
             SELECT
@@ -69,8 +69,9 @@ def calcular_totais_masseiras_sql(periodo: str):
         GROUP BY device;
     """, (start, end))
 
-    # Monta resultado no mesmo formato original
-    result = {f"Masseira_{i}": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": None} for i in (1, 2)}
+    # Apenas monta resultado com valores 0, para garantir consistência no retorno
+    result = {"Masseira_1": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": 0.0},
+              "Masseira_2": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": 0.0}}
 
     for dev, energia, horas, corrente in c.fetchall():
         result[dev] = {
@@ -143,9 +144,9 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
 
     # -----------------------------------------------------------------------------------
     for i, (ts_str, dev, d_sel, b_liga, op_and, v1, v2, qtd_solic, peso) in enumerate(rows):
-        op = int(op_and)
         d = int(d_sel)
         b = int(b_liga)
+        op = int(op_and)
         v1i = int(v1)
         v2i = int(v2)
         ts = datetime.fromisoformat(ts_str)
@@ -365,11 +366,9 @@ def calcular_overview(periodo: str):
 
     return overview
 
-
 # ================================
 # MULTI OVERVIEW
 # ================================
-
 def _slice_ops_by_period(ops_dict, start_iso, end_iso):
     """Recorta operações por 'horario' dentro de [start,end], mantendo a estrutura."""
     if not ops_dict:
@@ -465,9 +464,9 @@ def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all):
 
 def gerar_overview_multi():
     """
-    Sem parâmetros. Períodos fixos: hoje, 7d, mtd, 30d, ytd.
-    - Chama calcula_operacoes_descarga_tanques apenas 2x no maior período (ytd)
-    - Recorta em memória para os demais
+    Períodos fixos: hoje, 7d, mtd, 30d, ytd.
+    - Chama calcula_operacoes_descarga_tanques apenas 2x (para água e resina) no maior período (ytd)
+    - Recorta em memória para os demais (com a função de slice)
     - KPIs de masseira calculados por período
     """
     PERIODOS = ["hoje", "7d", "mtd", "30d", "ytd"]

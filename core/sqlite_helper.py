@@ -2,6 +2,7 @@ import sqlite3
 import os
 from datetime import datetime
 from config import DB_FILE
+import csv
 
 def init_db():
     os.makedirs("data", exist_ok=True)
@@ -23,8 +24,7 @@ def save_to_sqlite(device_name, result):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
-    # ✅ Strip microseconds for ISO format to match datetime-local input
-    timestamp = datetime.now().replace(microsecond=0).isoformat()
+    timestamp = datetime.now().replace(microsecond=0).isoformat() # Formato: '2025-08-18T08:44:41'
 
     for tag, value in result.items():
         c.execute(
@@ -34,10 +34,6 @@ def save_to_sqlite(device_name, result):
 
     conn.commit()
     conn.close()
-
-# add this somewhere central (e.g., in core/sqlite_helper.py or near init_db)
-import sqlite3
-from config import DB_FILE
 
 def ensure_indexes():
     conn = sqlite3.connect(DB_FILE)
@@ -61,3 +57,20 @@ def ensure_indexes():
 
     conn.commit()
     conn.close()
+
+def save_to_csv(device_name, result, folder="data"):
+    os.makedirs(folder, exist_ok=True)
+    filename = os.path.join(folder, f"{device_name}.csv")
+    timestamp = datetime.now().isoformat()
+    fieldnames = ["timestamp"] + list(result.keys())
+    file_exists = os.path.isfile(filename)
+
+    with open(filename, mode="a", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        if not file_exists:
+            writer.writeheader()
+
+        row = {"timestamp": timestamp}
+        row.update(result)
+        writer.writerow(row)
