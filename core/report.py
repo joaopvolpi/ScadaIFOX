@@ -178,7 +178,7 @@ def _draw_header(canvas: Canvas, doc: SimpleDocTemplate, title: str = ""):
 # =========================
 # PDF
 # =========================
-def build_overview_report_pdf(data: Dict[str, Any]) -> bytes:
+def build_overview_report_pdf(data, data_base) -> bytes:
     buf = io.BytesIO()
     # Aumenta a margem superior para acomodar o header preto (NOVO)
     doc = SimpleDocTemplate(
@@ -196,7 +196,7 @@ def build_overview_report_pdf(data: Dict[str, Any]) -> bytes:
     styles = getSampleStyleSheet()
 
     # Cabeçalho textual do relatório (corpo)
-    story.append(Paragraph("Relatório de Produção - Visão Geral", ParagraphStyle(
+    story.append(Paragraph(f"Relatório de Produção - Visão Geral - Data Base: {data_base}", ParagraphStyle(
         name="H1",
         fontName="Helvetica-Bold",
         fontSize=16,
@@ -250,6 +250,6 @@ def build_overview_report_pdf(data: Dict[str, Any]) -> bytes:
     buf.seek(0)
     return buf.read()
 
-def generate_overview_report() -> bytes:
-    data = gerar_overview_multi()
-    return build_overview_report_pdf(data)
+def generate_overview_report(data_base) -> bytes:
+    data = gerar_overview_multi(data_base)
+    return build_overview_report_pdf(data, data_base)

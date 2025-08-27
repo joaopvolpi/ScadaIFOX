@@ -94,7 +94,8 @@ def api_meta(): # Leitura de unidades, metadados...
 @app.route("/api/overview")
 def api_overview():
     period = request.args.get("period", "hoje")
-    data = calcular_overview(period)
+    data_base = request.args.get("data_base", None)
+    data = calcular_overview(period, data_base=data_base)
     return jsonify(data)
 
 @app.route("/api/overview_multi")
@@ -109,16 +110,18 @@ def api_overview_multi():
       "ytd": {...}
     }
     """
-    results = gerar_overview_multi()
+    data_base = request.args.get("data_base", None)
+    results = gerar_overview_multi(data_base=data_base)
 
     return jsonify(results)
 
-@app.route("/relatorios/overview.pdf")
+@app.route("/gerar_relatorio")
 def baixar_relatorio_overview():
     """
     Rota para disparar o download do PDF.
     """
-    pdf_bytes = generate_overview_report()
+    data_base = request.args.get("data_base", None)
+    pdf_bytes = generate_overview_report(data_base)
     filename = f"Relatorio_Producao_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     return send_file(
         io.BytesIO(pdf_bytes),

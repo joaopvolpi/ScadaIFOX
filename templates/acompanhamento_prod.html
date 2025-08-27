@@ -76,6 +76,16 @@
       .chart-container { height: 180px; }
       :root { --mini-chart-h: 90px; }
     }
+
+  input[type="date"] {
+  background-color: #2c2c2c; /* Cor de fundo escura */
+  color: #e0e0e0; /* Cor do texto clara */
+  border: 1px solid #555; /* Borda sutil */
+  border-radius: 4px;
+  padding: 2px 3px;
+  font-family: inherit;
+  font-size: 1rem;
+}
   </style>
 </head>
 <body>
@@ -115,6 +125,17 @@
           </div>
         </div>
       </div>
+    </div>
+    <div class="card">
+    <h2>Baixar Relatório <i class="fas fa-file-download"></i></h2>
+    <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+        <label for="dataRelatorio">Data Base:</label>
+        <input type="date" id="dataRelatorio" name="dataRelatorio">
+        <button id="downloadRelatorioBtn" class="btn">Baixar PDF</button>
+    <div id="loading" style="display: none; text-align: center;">
+        <i class="fas fa-spinner fa-spin"></i> Gerando relatório...
+    </div>
+    </div>
     </div>
   </div>
 
@@ -415,6 +436,52 @@ async function fetchLiveAndRender() {
     for (const dev in tankMapping) setStatusBall(tankMapping[dev].status, false);
   }
 }
+/* =======================================================================================
+   BLOCO 3 — Download de Relatório
+======================================================================================= */
+  document.addEventListener('DOMContentLoaded', () => {
+    const downloadBtn = document.getElementById('downloadRelatorioBtn');
+    const dateInput = document.getElementById('dataRelatorio');
+    const loadingIndicator = document.getElementById('loading');
+
+    downloadBtn.addEventListener('click', async () => {
+      const selectedDate = dateInput.value;
+      if (!selectedDate) {
+        alert('Por favor, selecione uma data para o relatório.');
+        return;
+      }
+
+      loadingIndicator.style.display = 'block';
+
+      try {
+        const url = `/gerar_relatorio?data_base=${selectedDate}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`Erro HTTP! Status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const filename = `relatorio_producao_${selectedDate}.pdf`;
+
+        // Cria um link temporário para download
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+      } catch (error) {
+        console.error('Erro ao baixar o relatório:', error);
+        alert('Ocorreu um erro ao baixar o relatório. Por favor, tente novamente.');
+      } finally {
+        loadingIndicator.style.display = 'none';
+      }
+    });
+  });
 
 /* =======================================================================================
    Inicialização

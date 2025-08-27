@@ -7,9 +7,14 @@ import time
 # ================================
 # Funções auxiliares
 # ================================
-def _periodo_para_datas(periodo: str):
+def _periodo_para_datas(periodo: str, data_base = None):
     """Retorna intervalo (start, end) baseado no período ('hoje', 'ontem', '7d', '30d', 'mtd', 'ytd')."""
-    end = datetime.now()
+    if data_base:
+        end = datetime.strptime(data_base, "%Y-%m-%d")
+        end = end.replace(hour=23, minute=59, second=59, microsecond=999999)
+    else:
+        end = datetime.now()
+
     if periodo == "hoje":
         start = end.replace(hour=0, minute=0, second=0, microsecond=0)
     elif periodo == "ontem":
@@ -30,8 +35,7 @@ def _periodo_para_datas(periodo: str):
 # ================================
 # KPI Masseiras
 # ================================
-def calcular_totais_masseiras_sql(periodo: str):
-    start, end = _periodo_para_datas(periodo)
+def calcular_totais_masseiras_sql(start, end):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
@@ -86,7 +90,7 @@ def calcular_totais_masseiras_sql(periodo: str):
 # ================================
 # Operações de descarga de tanques
 # ================================
-def calcula_operacoes_descarga_tanques(periodo: str, tipo):
+def calcula_operacoes_descarga_tanques(start, end, tipo):
     """
     Para cada tanque do tipo especificado, retorna:
     {
@@ -100,7 +104,6 @@ def calcula_operacoes_descarga_tanques(periodo: str, tipo):
       Descarga selecionada = 1 AND Botão Liga = 1.
     O destino é definido pelas válvulas no instante da borda.
     """
-    start, end = _periodo_para_datas(periodo)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
@@ -271,42 +274,28 @@ def _sum_ops_total(ops_dict):
 # ================================
 # OVERVIEW (apenas monta o JSON final)
 # ================================
-def calcular_overview(periodo: str):
+def calcular_overview(periodo, data_base=None):
     """
     Monta o JSON final no formato desejado, usando:
       - calcular_totais_masseiras(periodo)
       - calcula_operacoes_descarga_tanques(periodo, 'Resina')
       - calcula_operacoes_descarga_tanques(periodo, 'Agua')
     """
-    timings = {}
+    start, end = _periodo_para_datas(periodo, data_base)
 
-    t0 = time.perf_counter()
-    kpi_m = calcular_totais_masseiras_sql(periodo)
-    timings["calcular_totais_masseiras"] = time.perf_counter() - t0
+    kpi_m = calcular_totais_masseiras_sql(start, end)
 
-    t0 = time.perf_counter()
-    ops_resina = calcula_operacoes_descarga_tanques(periodo, "Resina")
-    timings["calcula_operacoes_descarga_tanques_resina"] = time.perf_counter() - t0
+    ops_resina = calcula_operacoes_descarga_tanques(start, end, "Resina")
 
-    t0 = time.perf_counter()
-    ops_agua = calcula_operacoes_descarga_tanques(periodo, "Agua")
-    timings["calcula_operacoes_descarga_tanques_agua"] = time.perf_counter() - t0
+    ops_agua = calcula_operacoes_descarga_tanques(start, end, "Agua")
 
-    t0 = time.perf_counter()
     agg_resina_by_m = _sum_ops_by_masseira(ops_resina)
-    timings["_sum_ops_by_masseira_resina"] = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
     agg_agua_by_m = _sum_ops_by_masseira(ops_agua)
-    timings["_sum_ops_by_masseira_agua"] = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
     tot_resina = _sum_ops_total(ops_resina)
-    timings["_sum_ops_total_resina"] = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
     tot_agua = _sum_ops_total(ops_agua)
-    timings["_sum_ops_total_agua"] = time.perf_counter() - t0
 
     # Montar parte das masseiras
     masseiras_out = {}
@@ -349,6 +338,7 @@ def calcular_overview(periodo: str):
     total_tachadas = int(tot_resina["num"])
 
     overview = {
+        "data_base": (datetime.now().date().isoformat() if not data_base else data_base),
         "period": periodo,
         "masseiras": masseiras_out,
         "materias_primas": materias_primas_out,
@@ -358,11 +348,6 @@ def calcular_overview(periodo: str):
             "horas_operacao": horas_total,
         },
     }
-
-    # Imprimir tempos
-    print("\n[DEBUG] Tempos de execução:")
-    for nome, dur in timings.items():
-        print(f"  {nome}: {dur:.4f} s")
 
     return overview
 
@@ -396,16 +381,16 @@ def _slice_ops_by_period(ops_dict, start_iso, end_iso):
             out[tanque] = {"Masseira_1": m1, "Masseira_2": m2}
     return out
 
-def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all):
+def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all, data_base=None):
     """Monta o JSON do overview para um período específico, cortando as operações pré-carregadas."""
-    start_iso, end_iso = _periodo_para_datas(periodo)
+    start, end = _periodo_para_datas(periodo, data_base)
 
     # KPIs dependem da janela -> calcula por período
-    kpi_m = calcular_totais_masseiras_sql(periodo)
+    kpi_m = calcular_totais_masseiras_sql(start, end)
 
     # Recortes das operações
-    ops_resina_p = _slice_ops_by_period(ops_resina_all, start_iso, end_iso)
-    ops_agua_p   = _slice_ops_by_period(ops_agua_all,   start_iso, end_iso)
+    ops_resina_p = _slice_ops_by_period(ops_resina_all, start, end)
+    ops_agua_p   = _slice_ops_by_period(ops_agua_all,   start, end)
 
     # Agregações
     agg_resina_by_m = _sum_ops_by_masseira(ops_resina_p)
@@ -452,6 +437,7 @@ def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all):
     total_tachadas = int(tot_resina["num"])
 
     return {
+        "data_base": (datetime.now().date().isoformat() if not data_base else data_base),
         "period": periodo,
         "masseiras": masseiras_out,
         "materias_primas": materias_primas_out,
@@ -462,7 +448,7 @@ def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all):
         },
     }
 
-def gerar_overview_multi():
+def gerar_overview_multi(data_base=None):
     """
     Períodos fixos: hoje, 7d, mtd, 30d, ytd.
     - Chama calcula_operacoes_descarga_tanques apenas 2x (para água e resina) no maior período (ytd)
@@ -470,30 +456,15 @@ def gerar_overview_multi():
     - KPIs de masseira calculados por período
     """
     PERIODOS = ["hoje", "7d", "mtd", "30d", "ytd"]
-    max_period = "ytd"
-
-    timings = {}
-    t0 = time.perf_counter()
+    start_max, end_max = _periodo_para_datas("ytd", data_base=data_base)
 
     # 2 chamadas ao DB (mais pesadas) no maior período
-    t1 = time.perf_counter()
-    ops_resina_all = calcula_operacoes_descarga_tanques(max_period, "Resina")
-    timings["ops_resina_all"] = time.perf_counter() - t1
-
-    t1 = time.perf_counter()
-    ops_agua_all   = calcula_operacoes_descarga_tanques(max_period, "Agua")
-    timings["ops_agua_all"] = time.perf_counter() - t1
+    ops_resina_all = calcula_operacoes_descarga_tanques(start_max, end_max, "Resina")
+    ops_agua_all   = calcula_operacoes_descarga_tanques(start_max, end_max, "Agua")
 
     # Monta saída para cada período fixo
     out = {}
     for p in PERIODOS:
-        t1 = time.perf_counter()
-        out[p] = _build_overview_for_period(p, ops_resina_all, ops_agua_all)
-        timings[f"build_{p}"] = time.perf_counter() - t1
-
-    timings["total"] = time.perf_counter() - t0
-    print("\n[DEBUG] overview_multi_fixed timings:")
-    for k, v in timings.items():
-        print(f"  {k}: {v:.4f}s")
+        out[p] = _build_overview_for_period(p, ops_resina_all, ops_agua_all, data_base=data_base)
 
     return out
