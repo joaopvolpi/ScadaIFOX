@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Consumo Diário</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Flatpickr -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <style>
+    main { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    .filters { display: flex; align-items: center; gap: 12px; margin: 10px 0 16px 0; flex-wrap: wrap; }
+    .chart-container {
+      background: #1f1f1f;
+      border: 1px solid #333;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    canvas {
+      width: 100% !important;
+      height: 560px !important;
+      background: #121212;
+      border: 1px solid #333;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+{% set page_title = "  - Consumo Diário" %}
+{% include "header.html" %}
+
+<main>
+  <div class="filters">
+    <label>Período:
+      <select id="periodo">
+        <option value="30d" selected>Últimos 30 dias</option>
+        <option value="7d">Últimos 7 dias</option>
+        <option value="mtd">Mês atual</option>
+        <option value="ytd">Ano atual</option>
+      </select>
+    </label>
+
+    <label>Data base:
+      <input type="text" id="dataBase" placeholder="YYYY-MM-DD">
+    </label>
+
+    <button id="btnCarregar">Carregar</button>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="stackedDailyChart"></canvas>
+  </div>
+</main>
+
+<script>
+  // ---- Config inicial ----
+  flatpickr("#dataBase", {
+    enableTime: false,
+    noCalendar: false,
+    dateFormat: "Y-m-d",
+    locale: "pt",
+    defaultDate: new Date().toISOString().slice(0,10)
+  });
+
+  // ordem lógica dos grupos na legenda
+  const ORDER_INDEX = { energia_kWh: 0, horas_operacao: 1, num_tachadas: 2 };
+
+  const MEASURES = [
+    { key: "energia_kWh",    label: "Energia",          unit:"kWh", axis: "y1" }, // eixo secundário (direita)
+    { key: "horas_operacao", label: "Horas de operação", unit:"h",  axis: "y"  },
+    { key: "num_tachadas",   label: "Nº de tachadas",    unit:"",   axis: "y"  }
+  ];
+
+  const COLOR = {
+    energia_kWh:   ["#3BA0FF", "#1D6FD1"],
+    horas_operacao:["#34D399", "#1E9C74"],
+    num_tachadas:  ["#F59E0B", "#C47A05"]
+  };
+
+  let chart = null;
+
+  function formatPtBr(n) {
+    if (n === null || n === undefined) return "";
+    return Number(n).toLocaleString("pt-BR");
+  }
+
+  function buildChartData(json) {
+    const dates = Object.keys(json).sort();
+    const datasets = [];
+
+    // Agrupa por métrica e, dentro de cada uma, M1 -> M2
+    for (const m of MEASURES) {
+      datasets.push({
+        label: `${m.label} — M1`,
+        stack: m.key,
+        backgroundColor: COLOR[m.key][0],
+        data: dates.map(d => json[d]?.Masseira_1?.[m.key] ?? 0),
+        yAxisID: m.axis
+      });
+      datasets.push({
+        label: `${m.label} — M2`,
+        stack: m.key,
+        backgroundColor: COLOR[m.key][1],
+        data: dates.map(d => json[d]?.Masseira_2?.[m.key] ?? 0),
+        yAxisID: m.axis
+      });
+    }
+    return { labels: dates, datasets };
+  }
+
+  async function fetchDaily(periodo, dataBase) {
+    const url = `/api/daily_tachadas?periodo=${encodeURIComponent(periodo)}&data_base=${encodeURIComponent(dataBase)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Erro API: ${res.status}`);
+    return await res.json();
+  }
+
+  function makeOrUpdateChart(config) {
+    const ctx = document.getElementById("stackedDailyChart").getContext("2d");
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: {
+            color: "#e0e0e0",
+            // Ordena por grupo: Energia -> Horas -> Tachadas, e M1 antes de M2
+            sort: (a, b) => {
+              const da = chart?.data?.datasets[a.datasetIndex] ?? config.datasets[a.datasetIndex];
+              const db = chart?.data?.datasets[b.datasetIndex] ?? config.datasets[b.datasetIndex];
+              const ga = ORDER_INDEX[da.stack] ?? 99;
+              const gb = ORDER_INDEX[db.stack] ?? 99;
+              if (ga !== gb) return ga - gb;
+              const ia = /— M1$/.test(da.label) ? 0 : 1;
+              const ib = /— M1$/.test(db.label) ? 0 : 1;
+              return ia - ib;
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const ds = ctx.dataset;
+              const val = formatPtBr(ctx.parsed.y);
+              const m = MEASURES.find(mm => mm.key === ds.stack);
+              const unit = m ? ` ${m.unit}` : "";
+              return `${ds.label}: ${val}${unit}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: "#cfcfcf" },
+          grid: { color: "#333" }
+        },
+        // eixo principal (esquerda) para horas e tachadas
+        y: {
+          stacked: true,
+          ticks: { color: "#cfcfcf", callback: (v) => formatPtBr(v) },
+          grid: { color: "#333" },
+          title: { display: true, text: "Horas / Nº de tachadas", color: "#cfcfcf" }
+        },
+        // eixo secundário (direita) para energia
+        y1: {
+          position: "right",
+          stacked: true, // mantém empilhamento dentro do próprio eixo
+          ticks: { color: "#cfcfcf", callback: (v) => formatPtBr(v) },
+          grid: { drawOnChartArea: false }, // evita poluição visual
+          title: { display: true, text: "Energia (kWh)", color: "#cfcfcf" }
+        }
+      }
+    };
+
+    if (!chart) {
+      chart = new Chart(ctx, { type: "bar", data: config, options });
+    } else {
+      chart.data.labels = config.labels;
+      chart.data.datasets = config.datasets;
+      chart.update('none');
+    }
+  }
+
+  async function load() {
+    const periodo = document.getElementById("periodo").value || "30d";
+    const dataBase = document.getElementById("dataBase").value || new Date().toISOString().slice(0,10);
+    try {
+      const json = await fetchDaily(periodo, dataBase);
+      const cfg = buildChartData(json);
+      makeOrUpdateChart(cfg);
+    } catch (e) {
+      console.error(e);
+      alert("Falha ao carregar dados");
+    }
+  }
+
+  document.getElementById("btnCarregar").addEventListener("click", load);
+  load(); // primeira carga
+</script>
+
+</body>
+</html>

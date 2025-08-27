@@ -468,3 +468,153 @@ def gerar_overview_multi(data_base=None):
         out[p] = _build_overview_for_period(p, ops_resina_all, ops_agua_all, data_base=data_base)
 
     return out
+
+# ------------ NEW !!! -----------
+
+def calcular_tachadas_diarias(periodo: str, data_base=None):
+    """
+    Calcula e retorna o número de tachadas por dia e por masseira para um dado período.
+
+    Args:
+        periodo (str): O período a ser analisado ('hoje', 'ontem', '7d', etc.).
+        data_base (str, optional): Data de referência para os cálculos. Defaults to None.
+
+    Returns:
+        dict: Um dicionário onde as chaves são as datas (YYYY-MM-DD) e os valores
+              são dicionários com a contagem de tachadas para cada masseira.
+              Ex: {'2025-08-26': {'Masseira_1': 5, 'Masseira_2': 3}, ...}
+    """
+    start, end = _periodo_para_datas(periodo, data_base)
+
+    # A função calcula_operacoes_descarga_tanques já retorna os dados brutos de todas as operações.
+    # Vamos usar as operações de resina, pois a 'tachada' é definida por uma descarga de resina.
+    ops_resina = calcula_operacoes_descarga_tanques(start, end, "Resina")
+
+    # Estrutura para armazenar a contagem diária
+    tachadas_por_dia = defaultdict(lambda: {"Masseira_1": 0, "Masseira_2": 0})
+
+    for tanque, destinos in (ops_resina or {}).items():
+        for destino, lista_operacoes in destinos.items():
+            for op in lista_operacoes:
+                horario_str = op.get("horario")
+                if horario_str:
+                    try:
+                        # Extrai a data da string de horário
+                        dia = datetime.fromisoformat(horario_str).date().isoformat()
+                        # Incrementa o contador para a masseira e o dia correspondente
+                        tachadas_por_dia[dia][destino] += 1
+                    except ValueError:
+                        # Ignora se o formato da data for inválido
+                        continue
+    
+    # Converte o defaultdict para um dict padrão antes de retornar
+    return dict(tachadas_por_dia)
+
+def calcular_kpis_diarios_sql(periodo: str, data_base=None):
+    """
+    Calcula os KPIs diários (energia, horas de operação e corrente máxima) para
+    cada masseira usando a query SQL otimizada.
+
+    Args:
+        periodo (str): O período a ser analisado ('hoje', '7d', 'mtd', etc.).
+        data_base (str, optional): Data de referência para os cálculos. Defaults to None.
+
+    Returns:
+        dict: Um dicionário com os KPIs diários por masseira.
+              Ex: {'2025-08-26': {'Masseira_1': {'energia_kWh': 100.5, ...}, ...}, ...}
+    """
+    start, end = _periodo_para_datas(periodo, data_base)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    c.execute("""
+        WITH pivot AS (
+            SELECT
+                device,
+                timestamp,
+                strftime('%Y-%m-%d', timestamp) AS day,
+                MAX(CASE WHEN tag='OutputPower' THEN value END) AS power,
+                MAX(CASE WHEN tag='OutputFrequency' THEN value END) AS freq,
+                MAX(CASE WHEN tag='CurrentMagnitude' THEN value END) AS curr_mag
+            FROM readings
+            WHERE device IN ('Masseira_1','Masseira_2')
+              AND tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
+              AND timestamp BETWEEN ? AND ?
+            GROUP BY timestamp, device
+        ),
+        daily_summary AS (
+            SELECT
+                day,
+                device,
+                SUM(prev_power * dt_h) AS energia_kWh,
+                SUM(CASE WHEN prev_freq > 0 THEN dt_h ELSE 0 END) AS horas_operacao,
+                MAX(curr_mag) AS corrente_max
+            FROM (
+                SELECT
+                    device,
+                    day,
+                    power,
+                    freq,
+                    curr_mag,
+                    LAG(power) OVER (PARTITION BY device ORDER BY timestamp) AS prev_power,
+                    LAG(freq) OVER (PARTITION BY device ORDER BY timestamp) AS prev_freq,
+                    (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 AS dt_h
+                FROM pivot
+            )
+            GROUP BY day, device
+        )
+        SELECT
+            day,
+            device,
+            ROUND(energia_kWh, 2) AS energia_kWh,
+            ROUND(horas_operacao, 2) AS horas_operacao
+        FROM daily_summary
+        ORDER BY day, device;
+    """, (start, end))
+
+    result = defaultdict(lambda: {"Masseira_1": {}, "Masseira_2": {}})
+    
+    for day, device, energia, horas in c.fetchall():
+        result[day][device] = {
+            "energia_kWh": energia,
+            "horas_operacao": horas,
+            "num_tachadas": 0, # Será atualizado depois
+        }
+
+    conn.close()
+    return dict(result)
+
+def gerar_relatorio_diario_masseiras(periodo: str, data_base=None):
+    """
+    Combina os resultados de KPIs e contagem de tachadas em um relatório diário consolidado.
+
+    Args:
+        periodo (str): O período a ser analisado.
+        data_base (str, optional): Data de referência. Defaults to None.
+
+    Returns:
+        dict: Um dicionário com todos os dados consolidados por dia.
+              Ex: {'2025-08-26': {'Masseira_1': {'energia_kWh': 100.5, 'num_tachadas': 5, ...}, ...}, ...}
+    """
+    # 1. Obter os KPIs (energia, horas de operação, etc.)
+    kpis_diarios = calcular_kpis_diarios_sql(periodo, data_base)
+    
+    # 2. Obter a contagem de tachadas
+    tachadas_diarias = calcular_tachadas_diarias(periodo, data_base)
+
+    # 3. Consolidar os resultados
+    relatorio = defaultdict(lambda: {"Masseira_1": {}, "Masseira_2": {}})
+
+    # Primeiro, preenche com os KPIs diários
+    for dia, dados_masseira in kpis_diarios.items():
+        relatorio[dia]["Masseira_1"].update(dados_masseira.get("Masseira_1", {}))
+        relatorio[dia]["Masseira_2"].update(dados_masseira.get("Masseira_2", {}))
+    
+    # Em seguida, adiciona a contagem de tachadas
+    for dia, dados_tachadas in tachadas_diarias.items():
+        if "Masseira_1" in dados_tachadas:
+            relatorio[dia]["Masseira_1"]["num_tachadas"] = dados_tachadas["Masseira_1"]
+        if "Masseira_2" in dados_tachadas:
+            relatorio[dia]["Masseira_2"]["num_tachadas"] = dados_tachadas["Masseira_2"]
+
+    return dict(relatorio)

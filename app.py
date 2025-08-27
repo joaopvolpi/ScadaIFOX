@@ -42,6 +42,10 @@ def tanques_live():
 def acompanhamento_prod():
     return render_template("acompanhamento_prod.html")
 
+@app.route("/consumo_diario") # Rota para gráfico diário de consumo
+def consumo_diario():
+    return render_template("consumo_diario.html")
+
 # API Endpoints
 
 @app.route("/api/live")
@@ -129,6 +133,13 @@ def baixar_relatorio_overview():
         as_attachment=True,
         download_name=filename,
     )
+
+@app.route("/api/daily_tachadas")
+def daily_tachadas():
+    periodo = request.args.get("periodo", "30d")
+    data_base = request.args.get("data_base", None)
+    data = gerar_relatorio_diario_masseiras(periodo, data_base=data_base)
+    return jsonify(data)
 
 if __name__ == "__main__":
     # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
