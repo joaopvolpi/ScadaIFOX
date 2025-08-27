@@ -56,12 +56,19 @@
       gap: 20px;
     }
 
-    canvas {
-      width: 100% !important;
+    /* Change 1: Add a height to the canvas parent container */
+    .chart-wrapper {
+      position: relative;
+      height: 200px; /* Adjust this value as needed */
       background: #121212;
       border: 1px solid #333;
       border-radius: 6px;
-      aspect-ratio: 2 / 1;
+    }
+    
+    /* Change 2: Ensure canvas fills its parent */
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
     }
   </style>
 </head>
@@ -75,11 +82,11 @@
       <h2>Masseira 1</h2>
       <div id="live-Masseira_1" class="live-data"></div>
       <div class="charts-grid">
-        <canvas id="chart-Masseira_1-RPM"></canvas>
-        <canvas id="chart-Masseira_1-OutputFrequency"></canvas>
-        <canvas id="chart-Masseira_1-CurrentMagnitude"></canvas>
-        <canvas id="chart-Masseira_1-PercentageLoad"></canvas>
-        <canvas id="chart-Masseira_1-OutputPower"></canvas>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_1-RPM"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_1-OutputFrequency"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_1-CurrentMagnitude"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_1-PercentageLoad"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_1-OutputPower"></canvas></div>
       </div>
     </div>
 
@@ -87,11 +94,11 @@
       <h2>Masseira 2</h2>
       <div id="live-Masseira_2" class="live-data"></div>
       <div class="charts-grid">
-        <canvas id="chart-Masseira_2-RPM"></canvas>
-        <canvas id="chart-Masseira_2-OutputFrequency"></canvas>
-        <canvas id="chart-Masseira_2-CurrentMagnitude"></canvas>
-        <canvas id="chart-Masseira_2-PercentageLoad"></canvas>
-        <canvas id="chart-Masseira_2-OutputPower"></canvas>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_2-RPM"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_2-OutputFrequency"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_2-CurrentMagnitude"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_2-PercentageLoad"></canvas></div>
+        <div class="chart-wrapper"><canvas id="chart-Masseira_2-OutputPower"></canvas></div>
       </div>
     </div>
   </main>
@@ -130,8 +137,7 @@
             options: {
               animation: false,
               responsive: true,
-              maintainAspectRatio: true,
-              aspectRatio: 4,
+              maintainAspectRatio: false, // <-- Change 3: Set to false
               plugins: {
                 legend: { labels: { color: "#e0e0e0" } }
               },

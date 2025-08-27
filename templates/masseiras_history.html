@@ -95,6 +95,15 @@
 
     Chart.defaults.elements.line.borderWidth = 2;
 
+    function formatAsLocalWallClock(ms) {
+      const d = new Date(ms);
+      const day   = String(d.getUTCDate()).padStart(2,'0');
+      const month = String(d.getUTCMonth()+1).padStart(2,'0');
+      const hour  = String(d.getUTCHours()).padStart(2,'0');
+      const min   = String(d.getUTCMinutes()).padStart(2,'0');
+      return `${day}/${month} ${hour}:${min}`;
+    }
+
     async function loadHistory() {
       const device = document.getElementById("device").value;
       const checkedTags = Array.from(document.querySelectorAll('input[type=checkbox]:checked')).map(cb => cb.value);
@@ -114,7 +123,6 @@
       const res = await fetch(`/api/history?${params.toString()}`);
       const data = await res.json();
 
-      // Build datasets using numeric timestamps directly
       let minTime = Number.POSITIVE_INFINITY;
       let maxTime = Number.NEGATIVE_INFINITY;
 
@@ -140,7 +148,6 @@
       const ctx = document.getElementById("historyChart").getContext("2d");
 
       if (!chart) {
-        // Create ONCE
         chart = new Chart(ctx, {
           type: "line",
           data: { datasets },
@@ -153,8 +160,8 @@
               tooltip: {
                 callbacks: {
                   label: function(context) {
-                    const date = new Date(context.parsed.x); // x is numeric ms
-                    return `${context.dataset.label}: ${context.parsed.y} em ${date.toLocaleString('pt-BR')}`;
+                    const formatted = formatAsLocalWallClock(context.parsed.x);
+                    return `${context.dataset.label}: ${context.parsed.y} em ${formatted}`;
                   }
                 }
               }
@@ -164,12 +171,14 @@
                 type: "time",
                 time: {
                   tooltipFormat: 'dd/MM HH:mm',
-                  displayFormats: { second:'dd/MM HH:mm', minute:'dd/MM HH:mm', hour:'dd/MM HH:mm' }
+                  displayFormats: { minute:'dd/MM HH:mm', hour:'dd/MM HH:mm' }
                 },
-                title: { display: true, text: "Tempo", color: "#e0e0e0" },
-                ticks: { color: "#c0c0c0" },
+                ticks: {
+                  color: "#c0c0c0",
+                  callback: (val, idx) => formatAsLocalWallClock(val)
+                },
                 grid: { color: "#333" },
-                ...(isFinite(minTime) && isFinite(maxTime) ? { min: minTime, max: maxTime } : {})
+                ...(isFinite(minTime) && isFinite(maxTime) ? { min: minTime, max: maxTime } : {}),
               },
               y: {
                 title: { display: true, text: "Valor", color: "#e0e0e0" },
@@ -189,7 +198,7 @@
           delete chart.options.scales.x.min;
           delete chart.options.scales.x.max;
         }
-        chart.update('none'); // no animation, very fast
+        chart.update('none'); 
       }
     }
 
