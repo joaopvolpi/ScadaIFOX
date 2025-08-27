@@ -21,9 +21,9 @@ def _periodo_para_datas(periodo: str, data_base = None):
         start = (end - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end = start.replace(hour=23, minute=59, second=59, microsecond=999999)
     elif periodo == "7d":
-        start = end - timedelta(days=7)
+        start = (end - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
     elif periodo == "30d":
-        start = end - timedelta(days=30)
+        start = (end - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
     elif periodo == "mtd":  # Month to Date
         start = end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     elif periodo == "ytd":  # Year to Date
