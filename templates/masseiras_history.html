@@ -84,11 +84,15 @@
   </main>
 
   <script>
+    const now = new Date();
+    const start_default = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 7, 0)
+    const end_default = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0)
+
     flatpickr("#start", {
-      enableTime: true, noCalendar: false, dateFormat: "d/m/Y H:i", time_24hr: true, locale: "pt"
+      enableTime: true, noCalendar: false, dateFormat: "d/m/Y H:i", time_24hr: true, locale: "pt",  defaultDate: start_default
     });
     flatpickr("#end", {
-      enableTime: true, noCalendar: false, dateFormat: "d/m/Y H:i", time_24hr: true, locale: "pt"
+      enableTime: true, noCalendar: false, dateFormat: "d/m/Y H:i", time_24hr: true, locale: "pt",  defaultDate: end_default
     });
 
     let chart;
@@ -212,6 +216,11 @@
       const colors = ["#00bfff", "#28a745", "#ffc107", "#ff4500", "#9370db"];
       return colors[Math.floor(Math.random() * colors.length)];
     }
+
+    window.addEventListener("DOMContentLoaded", () => {
+    loadHistory();
+    });
+
   </script>
 
 </body>

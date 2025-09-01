@@ -70,8 +70,8 @@ def poll_device(device_name, device_config, store):
         try:
             # ---------- Verifica se é hora de coleta
             now = datetime.now().time()
-            if (dt_time(11, 30) <= now <= dt_time(13, 30)) or (now >= dt_time(17, 0)):
-                print(f"[{device_name}] Horário de almoço (11:30 a 13:30) ou fim do expediente (após 17:00) - Coleta interrompida.")
+            if (dt_time(11, 40) <= now <= dt_time(13, 20)) or (now >= dt_time(17, 5)):
+                print(f"[{device_name}] Horário de almoço (11:40 a 13:20) ou fim do expediente (após 17:05) - Coleta interrompida.")
                 time.sleep(config.POLL_INTERVAL)
                 continue
             # ----------
