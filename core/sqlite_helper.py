@@ -55,6 +55,16 @@ def ensure_indexes():
         AND device IN ('Tanque_1_Agua', 'Tanque_2_Agua', 'Tanque_1_Resina', 'Tanque_2_Resina')
     """)
 
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_readings_device_tag_ts
+        ON readings(device, tag, timestamp);
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_readings_device_tag_ts_value
+        ON readings(device, tag, timestamp, value);
+    """)
+
     conn.commit()
     conn.close()
 
