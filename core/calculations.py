@@ -67,7 +67,13 @@ def calcular_totais_masseiras_sql(start, end):
                 curr_mag,
                 LAG(power) OVER (PARTITION BY device ORDER BY timestamp) AS prev_power,
                 LAG(freq) OVER (PARTITION BY device ORDER BY timestamp) AS prev_freq,
-                (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 AS dt_h
+                CASE 
+                    WHEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
+                            OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 <= (5.0/60.0)
+                    THEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
+                            OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0
+                    ELSE 0
+                    END AS dt_h
             FROM pivot
         )
         GROUP BY device;
@@ -558,7 +564,13 @@ def calcular_kpis_diarios_sql(periodo: str, data_base=None):
                     curr_mag,
                     LAG(power) OVER (PARTITION BY device ORDER BY timestamp) AS prev_power,
                     LAG(freq) OVER (PARTITION BY device ORDER BY timestamp) AS prev_freq,
-                    (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 AS dt_h
+                    CASE 
+                        WHEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
+                                OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 <= (5.0/60.0)
+                        THEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
+                                OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0
+                        ELSE 0
+                        END AS dt_h
                 FROM pivot
             )
             GROUP BY day, device
