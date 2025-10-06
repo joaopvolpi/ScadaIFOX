@@ -313,10 +313,19 @@
     });
   }
 
+  let isLoading = false; // prevent overlapping calls
+
   async function load() {
-    const periodo = document.getElementById("periodo").value || "30d";
-    const dataBase = document.getElementById("dataBase").value || new Date().toISOString().slice(0,10);
+    if (isLoading) return; // ⛔ skip if a load is already running
+    isLoading = true;
+
+    const btn = document.getElementById("btnCarregar");
+    btn.disabled = true;
+    btn.textContent = "Carregando...";
+
     try {
+      const periodo = document.getElementById("periodo").value || "30d";
+      const dataBase = document.getElementById("dataBase").value || new Date().toISOString().slice(0,10);
       const json = await fetchDaily(periodo, dataBase);
       const labels = buildLabels(json);
       const { byDay: totalsPerDay, sumAll } = computeTachadasTotals(json, labels);
@@ -328,11 +337,17 @@
 
       makeTopChart({ labels, datasets: topDatasets }, totalsPerDay, overallPercent);
       makeEnergyChart({ labels, datasets: energyDatasets });
+
     } catch (e) {
       console.error(e);
       alert("Falha ao carregar dados");
+    } finally {
+      isLoading = false;
+      btn.disabled = false;
+      btn.textContent = "Carregar";
     }
   }
+
 
   document.getElementById("btnCarregar").addEventListener("click", load);
   load(); // primeira carga
