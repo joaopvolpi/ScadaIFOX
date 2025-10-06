@@ -26,7 +26,7 @@
       padding: 20px;
       border-radius: 8px;
       margin-bottom: 16px;
-      position: relative; /* para posicionar o badge de % geral */
+      position: relative;
     }
     .metric-badge {
       position: absolute;
@@ -79,7 +79,7 @@
     <button id="btnCarregar">Carregar</button>
   </div>
 
-  <!-- Gráfico 1: Horas + Nº de tachadas (com linha de capacidade e %s) -->
+  <!-- Gráfico 1 -->
   <div class="chart-container">
     <div class="metric-badge" id="metricCapacidade">
       % Capacidade total:
@@ -88,7 +88,7 @@
     <canvas id="stackedDailyChartTop"></canvas>
   </div>
 
-  <!-- Gráfico 2: Energia -->
+  <!-- Gráfico 2 -->
   <div class="chart-container">
     <canvas id="stackedDailyChartEnergy"></canvas>
   </div>
@@ -104,7 +104,6 @@
     defaultDate: new Date().toISOString().slice(0,10)
   });
 
-  // ordem lógica da legenda (gráfico de cima)
   const ORDER_INDEX_TOP = { horas_operacao: 0, num_tachadas: 1 };
 
   const MEASURES_TOP = [
@@ -167,7 +166,6 @@
     ];
   }
 
-  // Totais de tachadas por dia e do período
   function computeTachadasTotals(json, dates) {
     const byDay = dates.map(d =>
       (json[d]?.Masseira_1?.num_tachadas ?? 0) + (json[d]?.Masseira_2?.num_tachadas ?? 0)
@@ -183,29 +181,22 @@
     return await res.json();
   }
 
-  function makeOrUpdateTopChart(config, totalsPerDay, overallPercent) {
-    const ctx = document.getElementById("stackedDailyChartTop").getContext("2d");
+  function makeTopChart(config, totalsPerDay, overallPercent) {
+    const canvas = document.getElementById("stackedDailyChartTop");
+    const ctx = canvas.getContext("2d");
+
+    // 🔧 Destroi o gráfico anterior, se existir
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    Chart.register(ChartDataLabels);
 
     const options = {
       responsive: true,
       animation: false,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          labels: {
-            color: "#e0e0e0",
-            sort: (a, b) => {
-              const da = chartTop?.data?.datasets[a.datasetIndex] ?? config.datasets[a.datasetIndex];
-              const db = chartTop?.data?.datasets[b.datasetIndex] ?? config.datasets[b.datasetIndex];
-              const ga = ORDER_INDEX_TOP[da.stack] ?? 99;
-              const gb = ORDER_INDEX_TOP[db.stack] ?? 99;
-              if (ga !== gb) return ga - gb;
-              const ia = /— M1$/.test(da.label) ? 0 : 1;
-              const ib = /— M1$/.test(db.label) ? 0 : 1;
-              return ia - ib;
-            }
-          }
-        },
+        legend: { labels: { color: "#e0e0e0" } },
         tooltip: {
           callbacks: {
             label: (ctx) => {
@@ -215,15 +206,13 @@
               return `${ds.label}: ${val}${unit}`;
             },
             afterBody: (items) => {
-              // Exibe também o % diário de capacidade no tooltip
               if (!items?.length) return;
               const idx = items[0].dataIndex;
               const p = totalsPerDay[idx] ? (totalsPerDay[idx] / 16) * 100 : 0;
-              return `Capacidade do dia: ${formatPtBr(Math.round(p), 0)}%`;
+              return `Capacidade do dia: ${Math.round(p)}%`;
             }
           }
         },
-        // Linha de capacidade produtiva (16 tachadas)
         annotation: {
           annotations: {
             capacidade: {
@@ -245,11 +234,9 @@
             }
           }
         },
-        // Rótulos no topo das barras de "Nº de tachadas" (percentual por dia)
         datalabels: {
           display: (ctx) => {
             const ds = ctx.dataset;
-            // Mostrar só no conjunto "Nº de tachadas — M2" para não duplicar
             return ds.stack === 'num_tachadas' && /— M2$/.test(ds.label);
           },
           formatter: (value, ctx) => {
@@ -276,61 +263,54 @@
       }
     };
 
-    if (!chartTop) {
-      // Registrar o plugin de datalabels apenas uma vez
-      Chart.register(ChartDataLabels);
-      chartTop = new Chart(ctx, { type: "bar", data: config, options });
-    } else {
-      chartTop.data.labels = config.labels;
-      chartTop.data.datasets = config.datasets;
-      chartTop.update('none');
-    }
+    chartTop = new Chart(ctx, { type: "bar", data: config, options });
 
-    // Atualiza o badge de capacidade do período
     const badge = document.getElementById('metricCapacidadeValor');
-    badge.textContent = isFinite(overallPercent) ? `${formatPtBr(Math.round(overallPercent), 0)}%` : '–';
+    badge.textContent = isFinite(overallPercent)
+      ? `${formatPtBr(Math.round(overallPercent), 0)}%`
+      : '–';
   }
 
-  function makeOrUpdateEnergyChart(config) {
-    const ctx = document.getElementById("stackedDailyChartEnergy").getContext("2d");
+  function makeEnergyChart(config) {
+    const canvas = document.getElementById("stackedDailyChartEnergy");
+    const ctx = canvas.getContext("2d");
 
-    const options = {
-      responsive: true,
-      animation: false,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: "#e0e0e0" } },
-          datalabels: {
-            display: false   // 👈 impede os rótulos no gráfico de energia
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    chartEnergy = new Chart(ctx, {
+      type: "bar",
+      data: config,
+      options: {
+        responsive: true,
+        animation: false,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: "#e0e0e0" } },
+           datalabels: {
+            display: false
           },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const ds = ctx.dataset;
-              const val = formatPtBr(ctx.parsed.y);
-              return `${ds.label}: ${val} kWh`;
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const ds = ctx.dataset;
+                const val = formatPtBr(ctx.parsed.y);
+                return `${ds.label}: ${val} kWh`;
+              }
             }
           }
-        }
-      },
-      scales: {
-        x: { stacked: true, ticks: { color: "#cfcfcf" }, grid: { color: "#333" } },
-        y: {
-          stacked: true,
-          ticks: { color: "#cfcfcf", callback: (v) => formatPtBr(v) },
-          grid: { color: "#333" },
-          title: { display: true, text: "Energia (kWh)", color: "#cfcfcf" }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: "#cfcfcf" }, grid: { color: "#333" } },
+          y: {
+            stacked: true,
+            ticks: { color: "#cfcfcf", callback: (v) => formatPtBr(v) },
+            grid: { color: "#333" },
+            title: { display: true, text: "Energia (kWh)", color: "#cfcfcf" }
+          }
         }
       }
-    };
-
-    if (!chartEnergy) {
-      chartEnergy = new Chart(ctx, { type: "bar", data: config, options });
-    } else {
-      chartEnergy.data.labels = config.labels;
-      chartEnergy.data.datasets = config.datasets;
-      chartEnergy.update('none');
-    }
+    });
   }
 
   async function load() {
@@ -339,7 +319,6 @@
     try {
       const json = await fetchDaily(periodo, dataBase);
       const labels = buildLabels(json);
-
       const { byDay: totalsPerDay, sumAll } = computeTachadasTotals(json, labels);
       const days = labels.length || 1;
       const overallPercent = (sumAll / (16 * days)) * 100;
@@ -347,8 +326,8 @@
       const topDatasets = buildTopDatasets(json, labels);
       const energyDatasets = buildEnergyDatasets(json, labels);
 
-      makeOrUpdateTopChart({ labels, datasets: topDatasets }, totalsPerDay, overallPercent);
-      makeOrUpdateEnergyChart({ labels, datasets: energyDatasets });
+      makeTopChart({ labels, datasets: topDatasets }, totalsPerDay, overallPercent);
+      makeEnergyChart({ labels, datasets: energyDatasets });
     } catch (e) {
       console.error(e);
       alert("Falha ao carregar dados");
