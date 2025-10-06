@@ -94,7 +94,7 @@ def poll_device(device_name, device_config, store):
                 save_to_csv(device_name, all_data)
                 save_to_sqlite(device_name, all_data)
 
-            print(f"[{device_name}] Updated: {all_data}", flush=True)
+            # print(f"[{device_name}] Updated: {all_data}", flush=True)
         except Exception as e:
             print(f"Error polling {device_name}: {e}")
 
