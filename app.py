@@ -141,12 +141,27 @@ def daily_tachadas():
     data = gerar_relatorio_diario_masseiras(periodo, data_base=data_base)
     return jsonify(data)
 
+# ------------------
+
+def background_operations_updater():
+    """Runs periodically to detect and store new discharge operations."""
+    while True:
+        try:
+            update_operations_table()
+        except Exception as e:
+            print(f"[operations_updater] Error: {e}")
+        time.sleep(300)  # every 5 minutes
+
 if __name__ == "__main__":
     # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
     for device_name, device_config in config.DEVICES.items():
         t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
         t.daemon = True # Rodando em segundo plano
         t.start()
+
+    # 2. Start the background updater thread
+    t_ops = threading.Thread(target=background_operations_updater, daemon=True)
+    t_ops.start()
 
     # Start Flask server
     app.run(

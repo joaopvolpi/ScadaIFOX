@@ -96,7 +96,7 @@ def calcular_totais_masseiras_sql(start, end):
 # ================================
 # Operações de descarga de tanques
 # ================================
-def calcula_operacoes_descarga_tanques(start, end, tipo):
+def calcula_operacoes_descarga_tanques(start, end, tipo): # Função passa a ser usada somente no batch update da tabela operacoes
     """
     Para cada tanque do tipo especificado, retorna:
     {
@@ -226,12 +226,61 @@ def calcula_operacoes_descarga_tanques(start, end, tipo):
 
     return dict(resultado)
 
+def fetch_operacoes_from_table(start, end, tipo): # consulta da nova tabela operacoes
+    """
+    Lê operações já registradas na tabela 'operations' e retorna no mesmo formato
+    de saída usado por calcula_operacoes_descarga_tanques().
+
+    Estrutura de retorno:
+    {
+      "Tanque_1_<tipo>": {
+         "Masseira_1": [ {horario, qnt_solicitada, peso_inicio, peso_fim}, ... ],
+         "Masseira_2": [ ... ],
+      },
+      "Tanque_2_<tipo>": { ... }
+    }
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT
+            timestamp_start AS horario,
+            device,
+            tipo,
+            destino,
+            qnt_solicitada,
+            peso_inicio,
+            peso_fim
+        FROM operations
+        WHERE tipo = ?
+          AND timestamp_start BETWEEN ? AND ?
+        ORDER BY device, horario
+    """, (tipo, start, end))
+
+    rows = c.fetchall()
+    conn.close()
+
+    # Monta a estrutura no mesmo formato esperado pelas funções de agregação
+    resultado = defaultdict(lambda: {"Masseira_1": [], "Masseira_2": []})
+
+    for horario, device, tipo, destino, qnt_solicitada, peso_inicio, peso_fim in rows:
+        key = f"{device}_{tipo}"  # mantém compatibilidade com chamadas antigas
+        resultado[key][destino].append({
+            "horario": horario,
+            "qnt_solicitada": qnt_solicitada,
+            "peso_inicio": peso_inicio,
+            "peso_fim": peso_fim
+        })
+
+    return dict(resultado)
+
 # ================================
 # Helpers para agregação de operações
 # ================================
 def _sum_ops_by_masseira(ops_dict):
     """
-    ops_dict = saída de calcula_operacoes_descarga_tanques(..., tipo)
+    ops_dict = saída de fetch_operacoes_from_table(..., tipo)
     Retorna:
     {
       "Masseira_1": {"dosada": float, "real": float, "num": int},
@@ -284,16 +333,16 @@ def calcular_overview(periodo, data_base=None):
     """
     Monta o JSON final no formato desejado, usando:
       - calcular_totais_masseiras(periodo)
-      - calcula_operacoes_descarga_tanques(periodo, 'Resina')
-      - calcula_operacoes_descarga_tanques(periodo, 'Agua')
+      - fetch_operacoes_from_table(periodo, 'Resina')
+      - fetch_operacoes_from_table(periodo, 'Agua')
     """
     start, end = _periodo_para_datas(periodo, data_base)
 
     kpi_m = calcular_totais_masseiras_sql(start, end)
 
-    ops_resina = calcula_operacoes_descarga_tanques(start, end, "Resina")
+    ops_resina = fetch_operacoes_from_table(start, end, "Resina")
 
-    ops_agua = calcula_operacoes_descarga_tanques(start, end, "Agua")
+    ops_agua = fetch_operacoes_from_table(start, end, "Agua")
 
     agg_resina_by_m = _sum_ops_by_masseira(ops_resina)
 
@@ -457,7 +506,7 @@ def _build_overview_for_period(periodo, ops_resina_all, ops_agua_all, data_base=
 def gerar_overview_multi(data_base=None):
     """
     Períodos fixos: hoje, 7d, mtd, 30d, ytd.
-    - Chama calcula_operacoes_descarga_tanques apenas 2x (para água e resina) no maior período (ytd)
+    - Chama fetch_operacoes_from_table apenas 2x (para água e resina) no maior período (ytd)
     - Recorta em memória para os demais (com a função de slice)
     - KPIs de masseira calculados por período
     """
@@ -465,8 +514,8 @@ def gerar_overview_multi(data_base=None):
     start_max, end_max = _periodo_para_datas("ytd", data_base=data_base)
 
     # 2 chamadas ao DB (mais pesadas) no maior período
-    ops_resina_all = calcula_operacoes_descarga_tanques(start_max, end_max, "Resina")
-    ops_agua_all   = calcula_operacoes_descarga_tanques(start_max, end_max, "Agua")
+    ops_resina_all = fetch_operacoes_from_table(start_max, end_max, "Resina")
+    ops_agua_all   = fetch_operacoes_from_table(start_max, end_max, "Agua")
 
     # Monta saída para cada período fixo
     out = {}
@@ -474,8 +523,6 @@ def gerar_overview_multi(data_base=None):
         out[p] = _build_overview_for_period(p, ops_resina_all, ops_agua_all, data_base=data_base)
 
     return out
-
-# ------------ NEW !!! -----------
 
 def calcular_tachadas_diarias(periodo: str, data_base=None):
     """
@@ -492,9 +539,9 @@ def calcular_tachadas_diarias(periodo: str, data_base=None):
     """
     start, end = _periodo_para_datas(periodo, data_base)
 
-    # A função calcula_operacoes_descarga_tanques já retorna os dados brutos de todas as operações.
+    # A função fetch_operacoes_from_table já retorna os dados brutos de todas as operações.
     # Vamos usar as operações de resina, pois a 'tachada' é definida por uma descarga de resina.
-    ops_resina = calcula_operacoes_descarga_tanques(start, end, "Resina")
+    ops_resina = fetch_operacoes_from_table(start, end, "Resina")
 
     # Estrutura para armazenar a contagem diária
     tachadas_por_dia = defaultdict(lambda: {"Masseira_1": 0, "Masseira_2": 0})
