@@ -39,55 +39,29 @@ def calcular_totais_masseiras_sql(start, end):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
-    # Cálculo das integrais (para calcular potência em kWh) e tempo de operação (freq das masseiras > 0) direto no SQL
+    # Query the pre-aggregated daily table instead of raw readings
     c.execute("""
-        WITH pivot AS (
-            SELECT
-                device,
-                timestamp,
-                MAX(CASE WHEN tag='OutputPower' THEN value END) AS power,
-                MAX(CASE WHEN tag='OutputFrequency' THEN value END) AS freq,
-                MAX(CASE WHEN tag='CurrentMagnitude' THEN value END) AS curr_mag
-            FROM readings
-            WHERE device IN ('Masseira_1','Masseira_2')
-              AND tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
-              AND timestamp BETWEEN ? AND ?
-            GROUP BY timestamp, device
-        )
         SELECT
             device,
-            SUM(prev_power * dt_h) AS energia_kWh,
-            SUM(CASE WHEN prev_freq > 0 THEN dt_h ELSE 0 END) AS horas_operacao,
-            MAX(curr_mag) AS corrente_max
-        FROM (
-            SELECT
-                device,
-                power,
-                freq,
-                curr_mag,
-                LAG(power) OVER (PARTITION BY device ORDER BY timestamp) AS prev_power,
-                LAG(freq) OVER (PARTITION BY device ORDER BY timestamp) AS prev_freq,
-                CASE 
-                    WHEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
-                            OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 <= (5.0/60.0)
-                    THEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
-                            OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0
-                    ELSE 0
-                    END AS dt_h
-            FROM pivot
-        )
-        GROUP BY device;
+            ROUND(SUM(energia_kWh), 2) AS energia_kWh,
+            ROUND(SUM(horas_operacao), 2) AS horas_operacao,
+            ROUND(MAX(corrente_max), 2) AS corrente_max
+        FROM masseira_daily
+        WHERE date BETWEEN date(?) AND date(?)
+        GROUP BY device
     """, (start, end))
 
-    # Apenas monta resultado com valores 0, para garantir consistência no retorno
-    result = {"Masseira_1": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": 0.0},
-              "Masseira_2": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": 0.0}}
+    # Default output structure
+    result = {
+        "Masseira_1": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": 0.0},
+        "Masseira_2": {"energia_kWh": 0.0, "horas_operacao": 0.0, "corrente_max": 0.0},
+    }
 
     for dev, energia, horas, corrente in c.fetchall():
         result[dev] = {
-            "energia_kWh": round(energia or 0.0, 2),
-            "horas_operacao": round(horas or 0.0, 2),
-            "corrente_max": (round(corrente, 2) if corrente is not None else None),
+            "energia_kWh": energia or 0.0,
+            "horas_operacao": horas or 0.0,
+            "corrente_max": corrente or 0.0,
         }
 
     conn.close()
@@ -327,7 +301,7 @@ def _sum_ops_total(ops_dict):
     return tot
 
 # ================================
-# OVERVIEW (apenas monta o JSON final)
+# OVERVIEWS
 # ================================
 def calcular_overview(periodo, data_base=None):
     """
@@ -406,9 +380,6 @@ def calcular_overview(periodo, data_base=None):
 
     return overview
 
-# ================================
-# MULTI OVERVIEW
-# ================================
 def _slice_ops_by_period(ops_dict, start_iso, end_iso):
     """Recorta operações por 'horario' dentro de [start,end], mantendo a estrutura."""
     if not ops_dict:
@@ -564,80 +535,30 @@ def calcular_tachadas_diarias(periodo: str, data_base=None):
     return dict(tachadas_por_dia)
 
 def calcular_kpis_diarios_sql(periodo: str, data_base=None):
-    """
-    Calcula os KPIs diários (energia, horas de operação e corrente máxima) para
-    cada masseira usando a query SQL otimizada.
-
-    Args:
-        periodo (str): O período a ser analisado ('hoje', '7d', 'mtd', etc.).
-        data_base (str, optional): Data de referência para os cálculos. Defaults to None.
-
-    Returns:
-        dict: Um dicionário com os KPIs diários por masseira.
-              Ex: {'2025-08-26': {'Masseira_1': {'energia_kWh': 100.5, ...}, ...}, ...}
-    """
     start, end = _periodo_para_datas(periodo, data_base)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
     c.execute("""
-        WITH pivot AS (
-            SELECT
-                device,
-                timestamp,
-                strftime('%Y-%m-%d', timestamp) AS day,
-                MAX(CASE WHEN tag='OutputPower' THEN value END) AS power,
-                MAX(CASE WHEN tag='OutputFrequency' THEN value END) AS freq,
-                MAX(CASE WHEN tag='CurrentMagnitude' THEN value END) AS curr_mag
-            FROM readings
-            WHERE device IN ('Masseira_1','Masseira_2')
-              AND tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
-              AND timestamp BETWEEN ? AND ?
-            GROUP BY timestamp, device
-        ),
-        daily_summary AS (
-            SELECT
-                day,
-                device,
-                SUM(prev_power * dt_h) AS energia_kWh,
-                SUM(CASE WHEN prev_freq > 0 THEN dt_h ELSE 0 END) AS horas_operacao,
-                MAX(curr_mag) AS corrente_max
-            FROM (
-                SELECT
-                    device,
-                    day,
-                    power,
-                    freq,
-                    curr_mag,
-                    LAG(power) OVER (PARTITION BY device ORDER BY timestamp) AS prev_power,
-                    LAG(freq) OVER (PARTITION BY device ORDER BY timestamp) AS prev_freq,
-                    CASE 
-                        WHEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
-                                OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0 <= (5.0/60.0)
-                        THEN (strftime('%s', timestamp) - LAG(strftime('%s', timestamp)) 
-                                OVER (PARTITION BY device ORDER BY timestamp)) / 3600.0
-                        ELSE 0
-                        END AS dt_h
-                FROM pivot
-            )
-            GROUP BY day, device
-        )
         SELECT
-            day,
+            date,
             device,
-            ROUND(energia_kWh, 2) AS energia_kWh,
-            ROUND(horas_operacao, 2) AS horas_operacao
-        FROM daily_summary
-        ORDER BY day, device;
+            ROUND(energia_kWh, 2),
+            ROUND(horas_operacao, 2),
+            ROUND(corrente_max, 2)
+        FROM masseira_daily
+        WHERE date BETWEEN date(?) AND date(?)
+        ORDER BY date, device;
     """, (start, end))
 
     result = defaultdict(lambda: {"Masseira_1": {}, "Masseira_2": {}})
-    
-    for day, device, energia, horas in c.fetchall():
+
+    for day, device, energia, horas, corrente in c.fetchall():
         result[day][device] = {
             "energia_kWh": energia,
             "horas_operacao": horas,
-            "num_tachadas": 0, # Será atualizado depois
+            "corrente_max": corrente,
+            "num_tachadas": 0,  # é preenchido por outra função
         }
 
     conn.close()

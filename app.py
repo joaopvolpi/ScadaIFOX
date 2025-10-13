@@ -161,16 +161,15 @@ def background_updater():
         time.sleep(3600)  # every 1 hour
 
 if __name__ == "__main__":
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
-        for device_name, device_config in config.DEVICES.items():
-            t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
-            t.daemon = True # Rodando em segundo plano
-            t.start()
+    # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
+    for device_name, device_config in config.DEVICES.items():
+        t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
+        t.daemon = True # Rodando em segundo plano
+        t.start()
 
-        # 2. Start the background updater thread
-        t_ops = threading.Thread(target=background_updater, daemon=True)
-        t_ops.start()
+    # 2. Start the background updater thread
+    t_ops = threading.Thread(target=background_updater, daemon=True)
+    t_ops.start()
 
     # Start Flask server
     app.run(
