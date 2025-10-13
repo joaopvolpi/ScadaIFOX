@@ -228,7 +228,7 @@ def calcula_operacoes_descarga_tanques(start, end, tipo): # Função passa a ser
 
 def fetch_operacoes_from_table(start, end, tipo): # consulta da nova tabela operacoes
     """
-    Lê operações já registradas na tabela 'operations' e retorna no mesmo formato
+    Lê operações já registradas na tabela 'dosagens' e retorna no mesmo formato
     de saída usado por calcula_operacoes_descarga_tanques().
 
     Estrutura de retorno:
@@ -252,7 +252,7 @@ def fetch_operacoes_from_table(start, end, tipo): # consulta da nova tabela oper
             qnt_solicitada,
             peso_inicio,
             peso_fim
-        FROM operations
+        FROM dosagens
         WHERE tipo = ?
           AND timestamp_start BETWEEN ? AND ?
         ORDER BY device, horario

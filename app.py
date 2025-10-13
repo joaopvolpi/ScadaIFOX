@@ -143,25 +143,34 @@ def daily_tachadas():
 
 # ------------------
 
-def background_operations_updater():
+def background_updater():
     """Runs periodically to detect and store new discharge operations."""
     while True:
         try:
-            update_operations_table()
+            update_dosagens_table()
         except Exception as e:
-            print(f"[operations_updater] Error: {e}")
-        time.sleep(300)  # every 5 minutes
+            print(f"[dosagens_updater] Error: {e}")
+
+        time.sleep(1)
+
+        try:
+            update_masseira_daily()
+        except Exception as e:
+            print(f"[masseira_updater] Error: {e}")
+
+        time.sleep(3600)  # every 1 hour
 
 if __name__ == "__main__":
-    # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
-    for device_name, device_config in config.DEVICES.items():
-        t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
-        t.daemon = True # Rodando em segundo plano
-        t.start()
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
+        for device_name, device_config in config.DEVICES.items():
+            t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))
+            t.daemon = True # Rodando em segundo plano
+            t.start()
 
-    # 2. Start the background updater thread
-    t_ops = threading.Thread(target=background_operations_updater, daemon=True)
-    t_ops.start()
+        # 2. Start the background updater thread
+        t_ops = threading.Thread(target=background_updater, daemon=True)
+        t_ops.start()
 
     # Start Flask server
     app.run(
