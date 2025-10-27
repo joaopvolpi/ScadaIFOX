@@ -14,8 +14,6 @@ from core.report import *
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
-init_db()
-ensure_indexes() # Apenas deixa as consultas no banco de dados mais rápidas
 
 # Estrutura de dados para armazenar as leituras mais recentes - É compartilhada entre threads
 DATA_STORE = {}
@@ -45,6 +43,11 @@ def acompanhamento_prod():
 @app.route("/consumo_diario") # Rota para gráfico diário de consumo
 def consumo_diario():
     return render_template("consumo_diario.html")
+
+@app.route("/dosagens")
+def dosagens_page():
+    return render_template("dosagens.html")
+
 
 # API Endpoints
 
@@ -141,6 +144,38 @@ def daily_tachadas():
     data = gerar_relatorio_diario_masseiras(periodo, data_base=data_base)
     return jsonify(data)
 
+@app.route("/api/dosagens")
+def api_dosagens():
+    tipo = request.args.get("tipo", None)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    sql = "SELECT timestamp_start, device, tipo, destino, qnt_solicitada, peso_inicio, peso_fim, peso_real FROM dosagens"
+    params = []
+    if tipo:
+        sql += " WHERE tipo = ?"
+        params.append(tipo)
+    sql += " ORDER BY timestamp_start DESC LIMIT 200"
+
+    c.execute(sql, params)
+    rows = c.fetchall()
+    conn.close()
+
+    data = [
+        {
+            "timestamp_start": r[0],
+            "device": r[1],
+            "tipo": r[2],
+            "destino": r[3],
+            "qnt_solicitada": r[4],
+            "peso_inicio": r[5],
+            "peso_fim": r[6],
+            "peso_real": r[7],
+        }
+        for r in rows
+    ]
+    return jsonify(data)
+
 # ------------------
 
 def background_updater():
@@ -161,6 +196,10 @@ def background_updater():
         time.sleep(3600)  # every 1 hour
 
 if __name__ == "__main__":
+    
+    init_db()
+    ensure_indexes() # Apenas deixa as consultas no banco de dados mais rápidas
+
     # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
     for device_name, device_config in config.DEVICES.items():
         t = threading.Thread(target=poll_device, args=(device_name, device_config, DATA_STORE))

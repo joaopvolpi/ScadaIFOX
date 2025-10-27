@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dosagens</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    main { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; color: #e2e8f0; }
+    th, td { padding: 8px 10px; border: 1px solid #444; text-align: center; }
+    th { background: #222; }
+    tr:nth-child(even) { background: #1b1b1b; }
+    select { margin-left: 8px; }
+  </style>
+</head>
+<body>
+{% set page_title = "  - Dosagens" %}
+{% include "header.html" %}
+
+<main>
+  <h2>Tabela de Dosagens</h2>
+
+  <label>Filtrar por tipo:
+    <select id="tipoSelect">
+      <option value="">Todos</option>
+      <option value="Resina">Resina</option>
+      <option value="Agua">Água</option>
+    </select>
+  </label>
+
+  <table id="dosagensTable">
+    <thead>
+      <tr>
+        <th>Data/Hora</th>
+        <th>Dispositivo</th>
+        <th>Tipo</th>
+        <th>Destino</th>
+        <th>Qtd. Solicitada (kg)</th>
+        <th>Peso Início</th>
+        <th>Peso Fim</th>
+        <th>Peso Real</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</main>
+
+<script>
+async function loadDosagens() {
+  const tipo = document.getElementById("tipoSelect").value;
+  const url = tipo ? `/api/dosagens?tipo=${tipo}` : "/api/dosagens";
+  const res = await fetch(url);
+  const data = await res.json();
+  const tbody = document.querySelector("#dosagensTable tbody");
+  tbody.innerHTML = "";
+
+  for (const d of data) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${d.timestamp_start}</td>
+      <td>${d.device}</td>
+      <td>${d.tipo}</td>
+      <td>${d.destino}</td>
+      <td>${d.qnt_solicitada?.toFixed(2) ?? "—"}</td>
+      <td>${d.peso_inicio?.toFixed(2) ?? "—"}</td>
+      <td>${d.peso_fim?.toFixed(2) ?? "—"}</td>
+      <td>${d.peso_real?.toFixed(2) ?? "—"}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+document.getElementById("tipoSelect").addEventListener("change", loadDosagens);
+window.addEventListener("DOMContentLoaded", loadDosagens);
+</script>
+</body>
+</html>
