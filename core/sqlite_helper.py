@@ -65,21 +65,48 @@ def init_db():
     conn.close()
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE, timeout=3)
+    conn = sqlite3.connect(DB_FILE, timeout=20)
     conn.execute("PRAGMA journal_mode=WAL;")
     return conn
+
+def cleanup_db(days=30):
+    """
+    Deletes readings older than 30 days from the 'readings' table.
+    """
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    thirty_days_ago = (datetime.now() - timedelta(days=days)).isoformat()
+
+    print(f"[CLEANUP] Deletando registros de 'readings' anteriores a {thirty_days_ago}...")
+
+    try:
+        c.execute("DELETE FROM readings WHERE timestamp < ?", (thirty_days_ago,))
+        deleted_count = c.rowcount
+        conn.commit()
+        print(f"[CLEANUP] {deleted_count} registros antigos deletados com sucesso.")
+    except Exception as e:
+        print(f"[CLEANUP ERROR] Falha ao deletar registros antigos: {e}")
+    finally:
+        conn.close()
 
 def save_to_sqlite(device_name, result):
     conn = get_db_connection()
     c = conn.cursor()
 
-    timestamp = datetime.now().replace(microsecond=0).isoformat() # Formato: '2025-08-18T08:44:41'
-
-    for tag, value in result.items():
-        c.execute(
-            "INSERT INTO readings (timestamp, device, tag, value) VALUES (?, ?, ?, ?)",
-            (timestamp, device_name, tag, value)
-        )
+    timestamp = datetime.now().replace(microsecond=0).isoformat()
+    
+    # Preparar a lista de tuplas para inserção em lote
+    data_to_insert = [
+        (timestamp, device_name, tag, value)
+        for tag, value in result.items()
+    ]
+    
+    # Usar executemany para inserção em lote (mais eficiente)
+    c.executemany(
+        "INSERT INTO readings (timestamp, device, tag, value) VALUES (?, ?, ?, ?)",
+        data_to_insert
+    )
 
     conn.commit()
     conn.close()

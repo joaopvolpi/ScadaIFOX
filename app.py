@@ -196,9 +196,10 @@ def background_updater():
         time.sleep(3600)  # every 1 hour
 
 if __name__ == "__main__":
-    
+
     init_db()
     ensure_indexes() # Apenas deixa as consultas no banco de dados mais rápidas
+    cleanup_db(30) # Mantém readings apenas com dados recentes
 
     # Cria uma thread para cada dispositivo no dicionário de configuração  - "DATA_STORE" é compartilhado em todas as threads
     for device_name, device_config in config.DEVICES.items():

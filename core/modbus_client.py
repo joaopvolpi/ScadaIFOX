@@ -96,6 +96,6 @@ def poll_device(device_name, device_config, store):
 
             # print(f"[{device_name}] Updated: {all_data}", flush=True)
         except Exception as e:
-            print(f"Error polling {device_name}: {e}")
+            print(f"Error polling {device_name}: {e} - Time: {now}")
 
         time.sleep(config.POLL_INTERVAL)
