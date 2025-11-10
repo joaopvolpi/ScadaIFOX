@@ -2,7 +2,7 @@ from core.calculations import calcula_operacoes_descarga_tanques
 import sqlite3
 import os
 from datetime import datetime, timedelta
-from config import DB_FILE
+from config import DB_FILE, CLEANUP_DAYS
 import csv
 
 def init_db():
@@ -69,19 +69,18 @@ def get_db_connection():
     conn.execute("PRAGMA journal_mode=WAL;")
     return conn
 
-def cleanup_db(days=30):
+def cleanup_db():
     """
-    Deletes readings older than 30 days from the 'readings' table.
+    Deletes readings older than cleanup days from the 'readings' table.
     """
     conn = get_db_connection()
     c = conn.cursor()
 
-    thirty_days_ago = (datetime.now() - timedelta(days=days)).isoformat()
-
-    print(f"[CLEANUP] Deletando registros de 'readings' anteriores a {thirty_days_ago}...")
+    cut_off = (datetime.now() - timedelta(days=CLEANUP_DAYS)).isoformat()
+    print(f"[CLEANUP] Deletando registros de 'readings' anteriores a {cut_off}...")
 
     try:
-        c.execute("DELETE FROM readings WHERE timestamp < ?", (thirty_days_ago,))
+        c.execute("DELETE FROM readings WHERE timestamp < ?", (cut_off,))
         deleted_count = c.rowcount
         conn.commit()
         print(f"[CLEANUP] {deleted_count} registros antigos deletados com sucesso.")
