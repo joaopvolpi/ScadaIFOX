@@ -1,9 +1,39 @@
 from core.calculations import calcula_operacoes_descarga_tanques
 import sqlite3
 import os
+import threading
 from datetime import datetime, timedelta
-from config import DB_FILE, CLEANUP_DAYS
+from config import CLEANUP_DAYS, DB_FILE  # DB_FILE still used for initial path
 import csv
+
+# ============================================================
+# GLOBALS (minimal additions)
+# ============================================================
+
+GLOBAL_CONN = None
+DB_LOCK = threading.Lock()
+
+
+def get_global_conn():
+    global GLOBAL_CONN
+
+    if GLOBAL_CONN is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        db_path = os.path.join(base_dir, "..", DB_FILE) if not os.path.isabs(DB_FILE) else DB_FILE
+        db_path = os.path.abspath(db_path)
+
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        GLOBAL_CONN = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
+        GLOBAL_CONN.execute("PRAGMA journal_mode=WAL;")
+        GLOBAL_CONN.execute("PRAGMA synchronous=NORMAL;")
+
+    return GLOBAL_CONN
+
+
+# ============================================================
+# INIT DB
+# ============================================================
 
 def init_db():
     os.makedirs("data", exist_ok=True)
@@ -36,7 +66,6 @@ def init_db():
         )
     """)
 
-    # --- Daily cache for masseiras (energy integration, hours, current) ---
     c.execute("""
         CREATE TABLE IF NOT EXISTS masseira_daily (
             date TEXT NOT NULL,
@@ -52,8 +81,6 @@ def init_db():
         )
     """)
 
-
-    # --- Meta table to store last processed timestamp for incremental updates ---
     c.execute("""
         CREATE TABLE IF NOT EXISTS meta (
             key TEXT PRIMARY KEY,
@@ -64,97 +91,96 @@ def init_db():
     conn.commit()
     conn.close()
 
+
+# ============================================================
+# READ-ONLY CONNECTION (unchanged)
+# ============================================================
+
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE, timeout=20)
     conn.execute("PRAGMA journal_mode=WAL;")
     return conn
 
+
+# ============================================================
+# CLEANUP — switched to safe write
+# ============================================================
+
 def cleanup_db():
-    """
-    Deletes readings older than cleanup days from the 'readings' table.
-    """
-    conn = get_db_connection()
+    conn = get_global_conn()
     c = conn.cursor()
 
     cut_off = (datetime.now() - timedelta(days=CLEANUP_DAYS)).isoformat()
     print(f"[CLEANUP] Deletando registros de 'readings' anteriores a {cut_off}...")
 
     try:
-        c.execute("DELETE FROM readings WHERE timestamp < ?", (cut_off,))
-        deleted_count = c.rowcount
-        conn.commit()
+        with DB_LOCK:
+            c.execute("DELETE FROM readings WHERE timestamp < ?", (cut_off,))
+            deleted_count = c.rowcount
+            conn.commit()
         print(f"[CLEANUP] {deleted_count} registros antigos deletados com sucesso.")
     except Exception as e:
         print(f"[CLEANUP ERROR] Falha ao deletar registros antigos: {e}")
-    finally:
-        conn.close()
+
+
+# ============================================================
+# SAVE TO SQLITE — NOW THREAD-SAFE
+# ============================================================
 
 def save_to_sqlite(device_name, result):
-    conn = get_db_connection()
+    conn = get_global_conn()
     c = conn.cursor()
 
     timestamp = datetime.now().replace(microsecond=0).isoformat()
-    
-    # Preparar a lista de tuplas para inserção em lote
+
     data_to_insert = [
         (timestamp, device_name, tag, value)
         for tag, value in result.items()
     ]
-    
-    # Usar executemany para inserção em lote (mais eficiente)
-    c.executemany(
-        "INSERT INTO readings (timestamp, device, tag, value) VALUES (?, ?, ?, ?)",
-        data_to_insert
-    )
 
-    conn.commit()
-    conn.close()
+    with DB_LOCK:
+        c.executemany(
+            "INSERT INTO readings (timestamp, device, tag, value) VALUES (?, ?, ?, ?)",
+            data_to_insert
+        )
+        conn.commit()
+
+
+# ============================================================
+# INDEXES — safe but kept local (unchanged logic)
+# ============================================================
 
 def ensure_indexes():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_global_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_readings_masseiras_cover_dev
-        ON readings(device, timestamp, tag, value)
-        WHERE tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
-        AND device IN ('Masseira_1', 'Masseira_2')
-    """)
+    with DB_LOCK:
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_readings_masseiras_cover_dev
+            ON readings(device, timestamp, tag, value)
+            WHERE tag IN ('OutputPower','OutputFrequency','CurrentMagnitude')
+            AND device IN ('Masseira_1', 'Masseira_2')
+        """)
 
-    cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_readings_tanque_ops_cover_dev
-        ON readings(device, timestamp, tag, value)
-        WHERE tag IN ('Descarga selecionada','Operacao em andamento','Botão Liga',
-                    'Valv. Desc. Mass. 1','Valv. Desc. Mass. 2',
-                    'Qnt. Solicitada (descarga)','Peso')
-        AND device IN ('Tanque_1_Agua', 'Tanque_2_Agua', 'Tanque_1_Resina', 'Tanque_2_Resina')
-    """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_readings_tanque_ops_cover_dev
+            ON readings(device, timestamp, tag, value)
+            WHERE tag IN ('Descarga selecionada','Operacao em andamento','Botão Liga',
+                        'Valv. Desc. Mass. 1','Valv. Desc. Mass. 2',
+                        'Qnt. Solicitada (descarga)','Peso')
+            AND device IN ('Tanque_1_Agua', 'Tanque_2_Agua', 'Tanque_1_Resina', 'Tanque_2_Resina')
+        """)
 
-    cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_readings_device_tag_ts
-        ON readings(device, tag, timestamp);
-    """)
-
-    cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_readings_device_tag_ts_value
-        ON readings(device, tag, timestamp, value);
-    """)
-
-    # index for dosagens lookups
-    cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_dosagens_device_ts
-        ON dosagens(device, timestamp_start);
-    """)
-
-    # fast lookups for daily cache
-    cur.execute("""
-        CREATE INDEX IF NOT EXISTS idx_masseira_daily_device_date
-        ON masseira_daily(device, date);
-    """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_readings_device_tag_ts ON readings(device, tag, timestamp)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_readings_device_tag_ts_value ON readings(device, tag, timestamp, value)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_dosagens_device_ts ON dosagens(device, timestamp_start)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_masseira_daily_device_date ON masseira_daily(device, date)")
+        conn.commit()
 
 
-    conn.commit()
-    conn.close()
+# ============================================================
+# CSV SAVE (unchanged)
+# ============================================================
 
 def save_to_csv(device_name, result, folder="data"):
     os.makedirs(folder, exist_ok=True)
@@ -173,12 +199,17 @@ def save_to_csv(device_name, result, folder="data"):
         row.update(result)
         writer.writerow(row)
 
+
+# ============================================================
+# META TABLE — using safe writes
+# ============================================================
+
 def _get_meta_value(key: str, conn=None):
-    """Reads a value from the meta table (e.g., last processed timestamp)."""
     close_after = False
     if conn is None:
-        conn = get_db_connection()
+        conn = get_db_connection()  # read-only allowed
         close_after = True
+
     c = conn.cursor()
     c.execute("SELECT value FROM meta WHERE key=?", (key,))
     row = c.fetchone()
@@ -186,24 +217,33 @@ def _get_meta_value(key: str, conn=None):
         conn.close()
     return row[0] if row else None
 
+
 def _set_meta_value(key: str, value: str, conn=None):
-    """Sets or updates a key-value pair in the meta table."""
-    close_after = False
-    if conn is None:
-        conn = get_db_connection()
-        close_after = True
-    c = conn.cursor()
-    c.execute("""
-        INSERT INTO meta(key, value) VALUES(?, ?)
-        ON CONFLICT(key) DO UPDATE SET value=excluded.value
-    """, (key, value))
-    if close_after:
-        conn.commit()
-        conn.close()
+    if conn:
+        c = conn.cursor()
+        with DB_LOCK:
+            c.execute("""
+                INSERT INTO meta(key, value) VALUES(?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """, (key, value))
+            conn.commit()
+    else:
+        conn2 = get_global_conn()
+        c2 = conn2.cursor()
+        with DB_LOCK:
+            c2.execute("""
+                INSERT INTO meta(key, value) VALUES(?, ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """, (key, value))
+            conn2.commit()
+
+
+# ============================================================
+# DOSAGENS — only INSERT modified to safe write
+# ============================================================
 
 def _insert_dosagens(ops_dict, tipo):
-    """Insert detected dosagens into the 'dosagens' table (idempotent)."""
-    conn = get_db_connection()
+    conn = get_global_conn()
     c = conn.cursor()
 
     inserted = 0
@@ -223,47 +263,43 @@ def _insert_dosagens(ops_dict, tipo):
                 peso_fim = op.get("peso_fim")
                 peso_real = (float(peso_inicio or 0) - float(peso_fim or 0))
 
-                c.execute("""
-                    INSERT INTO dosagens (
-                        timestamp_start, device, tipo, destino,
-                        qnt_solicitada, peso_inicio, peso_fim, peso_real, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    ts_start,
-                    dev,
-                    tipo,
-                    destino,
-                    op.get("qnt_solicitada"),
-                    peso_inicio,
-                    peso_fim,
-                    peso_real,
-                    datetime.now().isoformat(),
-                ))
+                with DB_LOCK:
+                    c.execute("""
+                        INSERT INTO dosagens (
+                            timestamp_start, device, tipo, destino,
+                            qnt_solicitada, peso_inicio, peso_fim, peso_real, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        ts_start,
+                        dev,
+                        tipo,
+                        destino,
+                        op.get("qnt_solicitada"),
+                        peso_inicio,
+                        peso_fim,
+                        peso_real,
+                        datetime.now().isoformat(),
+                    ))
+                    conn.commit()
                 inserted += 1
 
-    conn.commit()
-    conn.close()
     return inserted
 
+
+# ============================================================
+# DOSAGENS UPDATE (unchanged except safe write usage)
+# ============================================================
+
 def update_dosagens_table():
-    """
-    Batch process to detect and insert new discharge dosagens into the dosagens table.
-    - Reads last processed timestamp from meta table
-    - Uses calcula_operacoes_descarga_tanques() to find new ones
-    - Inserts new dosagens (if not already stored)
-    - Updates the last processed timestamp
-    """
     print("[dosagens_updater] Starting batch update...")
 
     last_ts = _get_meta_value("last_ops_ts")
     start_ts = last_ts if last_ts else "1970-01-01T00:00:00"
     end_ts = datetime.now().isoformat()
 
-    # --- Run detection for each type ---
     ops_resina = calcula_operacoes_descarga_tanques(start_ts, end_ts, "Resina")
     ops_agua   = calcula_operacoes_descarga_tanques(start_ts, end_ts, "Agua")
 
-    # --- Insert new ones ---
     count_res = _insert_dosagens(ops_resina, "Resina")
     count_agua = _insert_dosagens(ops_agua, "Agua")
 
@@ -271,13 +307,14 @@ def update_dosagens_table():
 
     total = count_res + count_agua
     print(f"[dosagens_updater] Inserted {total} new dosagens (Resina: {count_res}, Agua: {count_agua}).")
-    print(f"[dosagens_updater] Updated last processed timestamp to {end_ts}.")
-
     return total
 
+
+# ============================================================
+# MASSEIRA DAILY — only upserts use safe writes
+# ============================================================
+
 def _clip_5min_expr():
-    # Returns the SQL expression for dt_h capped at 5 minutes
-    # dt_h = min((t - prev_t)/3600, 5min)
     return """
         CASE
             WHEN prev_ts IS NULL THEN 0.0
@@ -290,56 +327,56 @@ def _clip_5min_expr():
         END
     """
 
-def _upsert_masseira_daily_row(c, day, device, energia, horas, corrmax, first_ts, last_ts, samples):
-    # UPSERT with additive fields and max semantics where needed
-    c.execute("""
-        INSERT INTO masseira_daily
-            (date, device, energia_kWh, horas_operacao, corrente_max, first_ts, last_ts, samples, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(date, device) DO UPDATE SET
-            energia_kWh   = COALESCE(masseira_daily.energia_kWh, 0) + COALESCE(excluded.energia_kWh, 0),
-            horas_operacao= COALESCE(masseira_daily.horas_operacao, 0) + COALESCE(excluded.horas_operacao, 0),
-            corrente_max  = CASE
-                                WHEN masseira_daily.corrente_max IS NULL THEN excluded.corrente_max
-                                WHEN excluded.corrente_max IS NULL THEN masseira_daily.corrente_max
-                                WHEN excluded.corrente_max > masseira_daily.corrente_max THEN excluded.corrente_max
-                                ELSE masseira_daily.corrente_max
-                            END,
-            first_ts      = COALESCE(masseira_daily.first_ts, excluded.first_ts),
-            last_ts       = CASE
-                                WHEN masseira_daily.last_ts IS NULL THEN excluded.last_ts
-                                WHEN excluded.last_ts IS NULL THEN masseira_daily.last_ts
-                                WHEN excluded.last_ts > masseira_daily.last_ts THEN excluded.last_ts
-                                ELSE masseira_daily.last_ts
-                            END,
-            samples       = COALESCE(masseira_daily.samples, 0) + COALESCE(excluded.samples, 0),
-            updated_at    = excluded.updated_at
-    """, (day, device, energia, horas, corrmax, first_ts, last_ts, samples, datetime.now().isoformat()))
+
+def _upsert_masseira_daily_row(day, device, energia, horas, corrmax, first_ts, last_ts, samples):
+    conn = get_global_conn()
+
+    with DB_LOCK:
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO masseira_daily
+                (date, device, energia_kWh, horas_operacao, corrente_max, first_ts, last_ts, samples, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(date, device) DO UPDATE SET
+                energia_kWh   = COALESCE(masseira_daily.energia_kWh, 0) + COALESCE(excluded.energia_kWh, 0),
+                horas_operacao= COALESCE(masseira_daily.horas_operacao, 0) + COALESCE(excluded.horas_operacao, 0),
+                corrente_max  = CASE
+                    WHEN masseira_daily.corrente_max IS NULL THEN excluded.corrente_max
+                    WHEN excluded.corrente_max IS NULL THEN masseira_daily.corrente_max
+                    WHEN excluded.corrente_max > masseira_daily.corrente_max THEN excluded.corrente_max
+                    ELSE masseira_daily.corrente_max END,
+                first_ts      = COALESCE(masseira_daily.first_ts, excluded.first_ts),
+                last_ts       = CASE
+                    WHEN masseira_daily.last_ts IS NULL THEN excluded.last_ts
+                    WHEN excluded.last_ts IS NULL THEN masseira_daily.last_ts
+                    WHEN excluded.last_ts > masseira_daily.last_ts THEN excluded.last_ts
+                    ELSE masseira_daily.last_ts END,
+                samples       = COALESCE(masseira_daily.samples, 0) + COALESCE(excluded.samples, 0),
+                updated_at    = excluded.updated_at
+        """, (day, device, energia, horas, corrmax, first_ts, last_ts, samples, datetime.now().isoformat()))
+        conn.commit()
+
 
 def update_masseira_daily():
-    """
-    Incrementally aggregate energy/hours/current for masseiras into masseira_daily,
-    processing ONLY new readings since the last processed timestamp per device.
-    """
     print("[masseira_daily] Starting batch update...")
 
     DEVICES = ("Masseira_1", "Masseira_2")
     TAGS = ("OutputPower","OutputFrequency","CurrentMagnitude")
 
-    conn = get_db_connection()
-    c = conn.cursor()
+    conn_ro = get_db_connection()  # read-only safe
+    c = conn_ro.cursor()
 
     end_ts = datetime.now().isoformat()
     clip_expr = _clip_5min_expr()
 
     total_rows = 0
+
     for dev in DEVICES:
         meta_key = f"last_energy_ts_{dev}"
-        start_ts = _get_meta_value(meta_key, conn=conn)
+        start_ts = _get_meta_value(meta_key, conn=conn_ro)
         if not start_ts:
             start_ts = "1970-01-01T00:00:00"
 
-        # Build the incremental aggregation query for this device
         query = f"""
         WITH pivot AS (
             SELECT
@@ -387,17 +424,14 @@ def update_masseira_daily():
         c.execute(query, (dev, start_ts, end_ts))
         rows = c.fetchall()
 
-        # Upsert per (day, device)
         for (day, device, energia, horas, corrmax, first_ts, last_ts, samples) in rows:
-            _upsert_masseira_daily_row(c, day, device, energia, horas, corrmax, first_ts, last_ts, samples)
+            _upsert_masseira_daily_row(day, device, energia, horas, corrmax, first_ts, last_ts, samples)
             total_rows += 1
 
-        # Advance the meta cursor only if we processed anything
         if rows:
-            _set_meta_value(meta_key, end_ts, conn=conn)
+            _set_meta_value(meta_key, end_ts)
 
-    conn.commit()
-    conn.close()
+    conn_ro.close()
 
     print(f"[masseira_daily] Upserted {total_rows} day/device rows. Cursor moved to {end_ts}.")
     return total_rows
