@@ -482,11 +482,16 @@ def gerar_overview_multi(data_base=None):
     - KPIs de masseira calculados por período
     """
     PERIODOS = ["hoje", "7d", "mtd", "30d", "ytd"]
-    start_max, end_max = _periodo_para_datas("ytd", data_base=data_base)
+
+    # corrigindo o bug que em janeiro o maior período é 30d e nao YTD
+    start_ytd, end_ytd = _periodo_para_datas("ytd", data_base=data_base)
+    start_30d, end_30d = _periodo_para_datas("30d", data_base=data_base) 
+    start_min = min(start_ytd, start_30d)
+    end_max = max(end_ytd, end_30d) # É pra ser sempre igual, mas nunca se sabe
 
     # 2 chamadas ao DB (mais pesadas) no maior período
-    ops_resina_all = fetch_operacoes_from_table(start_max, end_max, "Resina")
-    ops_agua_all   = fetch_operacoes_from_table(start_max, end_max, "Agua")
+    ops_resina_all = fetch_operacoes_from_table(start_min, end_max, "Resina")
+    ops_agua_all   = fetch_operacoes_from_table(start_min, end_max, "Agua")
 
     # Monta saída para cada período fixo
     out = {}
